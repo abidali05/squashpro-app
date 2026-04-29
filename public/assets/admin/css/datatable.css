@@ -1,0 +1,237 @@
+.admin-table-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(18, 18, 18, 0.06);
+}
+
+.admin-table-card .card-header {
+  background: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-add-btn {
+  background: #1f1f1f;
+  border-color: #1f1f1f;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.admin-add-btn:hover {
+  background: #121212;
+  border-color: #121212;
+  color: #ffffff;
+}
+
+.admin-toolbar-top {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.admin-toolbar-actions .form-select,
+.admin-filter-panel .form-control,
+.admin-filter-panel .form-select,
+.admin-filter-panel .input-group-text {
+  border-color: #e5e7eb;
+  min-height: 38px;
+}
+
+.admin-per-page {
+  min-width: 64px;
+  width: 64px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  padding-left: 0.6rem;
+  padding-right: 1.5rem;
+  font-weight: 500;
+}
+
+.admin-length-form .small,
+.admin-length-label {
+  white-space: nowrap;
+}
+
+.admin-length-label {
+  color: #1f3a5f;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.admin-filter-toggle {
+  border: 1px solid #e5e7eb;
+  color: #121212;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.admin-filter-toggle:hover {
+  border-color: #121212;
+  color: #121212;
+}
+
+.admin-filter-toggle.is-active,
+.admin-filter-toggle[aria-expanded='true'] {
+  background: #121212;
+  color: #ffffff;
+  border-color: #121212;
+}
+
+.admin-filter-collapse {
+  transition: all 0.25s ease;
+}
+
+.admin-filter-panel {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-datatable {
+  margin-bottom: 0;
+  min-width: 760px;
+}
+
+.admin-datatable thead th {
+  background: #f8f9fb;
+  color: #121212;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid #e8e8e8;
+  padding: 0.7rem 0.75rem;
+  white-space: nowrap;
+}
+
+.admin-datatable tbody td {
+  vertical-align: middle;
+  border-top: 1px solid #f0f0f0;
+  color: #1f1f1f;
+  font-size: 0.87rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.admin-actions-col {
+  width: 170px;
+}
+
+.admin-sort-link {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.admin-sort-link:hover {
+  color: #121212;
+}
+
+.action-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+  background: #f0f0f0;
+  color: #1f1f1f;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.action-icon-btn i {
+  font-size: 1rem;
+}
+
+.action-icon-edit {
+  background: #fff4e9;
+  color: #f87216;
+  border-color: #fbd2b4;
+}
+
+.action-icon-delete {
+  background: #ffebee;
+  color: #e53935;
+  border-color: #ffcdd2;
+}
+
+.action-icon-view {
+  background: #eef2ff;
+  color: #121212;
+  border-color: #d4dcff;
+}
+
+.action-icon-permission {
+  background: #ecffe5;
+  color: #5a8a00;
+  border-color: #d5f5bf;
+}
+
+.action-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(18, 18, 18, 0.08);
+}
+
+.admin-empty-state {
+  text-align: center;
+  color: #7a7a7a;
+  padding: 1.2rem 0.75rem;
+}
+
+.admin-pagination-wrap .pagination {
+  margin-bottom: 0;
+}
+
+@media (max-width: 767.98px) {
+  .admin-toolbar-top {
+    padding: 10px;
+  }
+
+  .admin-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-toolbar-left {
+    width: 100%;
+  }
+
+  .admin-toolbar-actions .admin-filter-toggle {
+    flex: 1 1 auto;
+  }
+
+  .admin-per-page {
+    width: 76px;
+    min-width: 76px;
+  }
+
+  .admin-filter-panel {
+    padding: 14px;
+  }
+
+  .admin-filter-panel .btn,
+  .admin-filter-panel .form-control,
+  .admin-filter-panel .form-select,
+  .admin-filter-panel .input-group-text {
+    min-height: 36px;
+  }
+
+  .admin-actions-col {
+    width: 150px;
+  }
+}

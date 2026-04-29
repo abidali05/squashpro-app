@@ -3,8 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -15,44 +13,44 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        $admin = [
-            "name" => "admin",
-            "email" => "admin@gmail.com",
-            "password" => Hash::make("admin123"),
-            "email_verified_at" => Carbon::now(),
+        $users = [
+            [
+                'name' => 'Super Admin',
+                'email' => 'admin@squashpro.com',
+                'password' => Hash::make('password'),
+                'role' => 'super_admin',
+            ],
+            [
+                'name' => 'Admin',
+                'email' => 'admin@squashpro.local',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+            ],
+            [
+                'name' => 'Club Owner',
+                'email' => 'club@squashpro.com',
+                'password' => Hash::make('password'),
+                'role' => 'club',
+            ],
+            [
+                'name' => 'Player User',
+                'email' => 'player@squashpro.com',
+                'password' => Hash::make('password'),
+                'role' => 'player',
+            ],
         ];
 
-        $admin = User::create($admin);
-        $admin->assignRole("admin");
+        foreach ($users as $payload) {
+            $user = User::updateOrCreate(
+                ['email' => $payload['email']],
+                [
+                    'name' => $payload['name'],
+                    'password' => $payload['password'],
+                    'email_verified_at' => now(),
+                ]
+            );
 
-        $adminVet = [
-            "name" => "adminVet",
-            "email" => "adminvet@gmail.com",
-            "password" => Hash::make("adminvet123"),
-            "email_verified_at" => Carbon::now(),
-        ];
-
-        $adminVet = User::create($adminVet);
-        $adminVet->assignRole("admin_vet");
-
-        $client = [
-            "name" => "client",
-            "email" => "client@gmail.com",
-            "password" => Hash::make("client123"),
-            "email_verified_at" => Carbon::now(),
-        ];
-
-        $client = User::create($client);
-        $client->assignRole("client");
-
-        $clientVet = [
-            "name" => "clientVet",
-            "email" => "clientvet@gmail.com",
-            "password" => Hash::make("clientvet123"),
-            "email_verified_at" => Carbon::now(),
-        ];
-
-        $clientVet = User::create($clientVet);
-        $clientVet->assignRole("client_vet");
+            $user->syncRoles([$payload['role']]);
+        }
     }
 }

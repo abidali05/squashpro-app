@@ -4,10 +4,12 @@
 
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('assets/vendor/libs/apex-charts/apex-charts.css')}}">
+<link rel="stylesheet" href="https://cdn.datatables.net/2.3.8/css/dataTables.dataTables.min.css">
 @endsection
 
 @section('vendor-script')
 <script src="{{asset('assets/vendor/libs/apex-charts/apexcharts.js')}}"></script>
+<script src="https://cdn.datatables.net/2.3.8/js/dataTables.min.js"></script>
 @endsection
 
 @section('page-script')
@@ -24,7 +26,9 @@
         <p class="pb-0">Best seller of the month</p>
         <h4 class="text-primary mb-1">$42.8k</h4>
         <p class="mb-2 pb-1">78% of target 🚀</p>
-        <a href="javascript:;" class="btn btn-sm btn-primary">View Sales</a>
+        <a href="javascript:void(0);" class="btn btn-sm btn-icon btn-primary" data-bs-toggle="tooltip" title="View Sales">
+          <i class="mdi mdi-chart-line"></i>
+        </a>
       </div>
       <img src="{{asset('assets/img/icons/misc/triangle-light.png')}}" class="scaleX-n1-rtl position-absolute bottom-0 end-0" width="166" alt="triangle background">
       <img src="{{asset('assets/img/illustrations/trophy.png')}}" class="scaleX-n1-rtl position-absolute bottom-0 end-0 me-4 mb-4 pb-2" width="83" alt="view sales">
@@ -137,7 +141,9 @@
             <p class="mb-0">Your sales performance is 45% 😎 better compared to last month</p>
           </div>
           <div class="d-grid mt-3 mt-md-4">
-            <button class="btn btn-primary" type="button">Details</button>
+            <button class="btn btn-icon btn-primary" type="button" data-bs-toggle="tooltip" title="View Details">
+              <i class="mdi mdi-information-outline"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -595,7 +601,7 @@
   <div class="col-12">
     <div class="card">
       <div class="table-responsive">
-        <table class="table">
+        <table id="adminUsersTable" class="table">
           <thead class="table-light">
             <tr>
               <th class="text-truncate">User</th>
@@ -759,3 +765,23 @@
   <!--/ Data Tables -->
 </div>
 @endsection
+
+@push('my-script')
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.DataTable) {
+      new DataTable('#adminUsersTable', {
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        searching: true,
+        ordering: true,
+        info: true
+      });
+    }
+
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+      new bootstrap.Tooltip(el);
+    });
+  });
+</script>
+@endpush
