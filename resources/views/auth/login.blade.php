@@ -14,9 +14,9 @@
             <div class="login-card">
                 <div class="app-brand justify-content-center mb-4">
                     <a href="{{ url('/') }}" class="app-brand-link gap-2">
-                        <span class="app-brand-logo demo">
+                        {{-- <span class="app-brand-logo demo">
                             @include('_partials.macros', ['height' => 20, 'color' => '#B5F23C'])
-                        </span>
+                        </span> --}}
                         <span class="app-brand-text demo text-heading fw-semibold">Squash Pro</span>
                     </a>
                 </div>

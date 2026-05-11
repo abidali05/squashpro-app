@@ -9,10 +9,16 @@
     $sort = $sort ?? 'created_at';
     $direction = $direction ?? 'desc';
     $columns = $columns ?? [];
+    $filters = $filters ?? [];  // extra dropdown filters e.g. status
     $query = request()->query();
 
     $filterId = 'admin-filters-' . \Illuminate\Support\Str::slug($title ?: 'table') . '-' . uniqid();
+
+    // Active if search OR any extra filter has a value
     $hasActiveFilters = filled($search);
+    foreach ($filters as $f) {
+        if (filled($f['value'] ?? '')) { $hasActiveFilters = true; break; }
+    }
 @endphp
 
 <div class="admin-table-card card">
@@ -72,12 +78,22 @@
                     <input type="hidden" name="direction" value="{{ $direction }}">
                     <input type="hidden" name="per_page" value="{{ $perPage }}">
 
-                    <div class="col-12 col-md-8 col-lg-9">
+                    <div class="col-12 col-md-8 col-lg-{{ $filters ? '6' : '9' }}">
                         <div class="input-group">
                             <span class="input-group-text"><i class="mdi mdi-magnify"></i></span>
                             <input type="text" name="search" value="{{ $search }}" class="form-control" placeholder="Search records...">
                         </div>
                     </div>
+
+                    @foreach($filters as $filter)
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <select name="{{ $filter['name'] }}" class="form-select">
+                            @foreach($filter['options'] as $val => $label)
+                                <option value="{{ $val }}" @selected(($filter['value'] ?? '') == $val)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endforeach
 
                     <div class="col-6 col-md-2 col-lg-1">
                         <button class="btn btn-outline-dark w-100" type="submit">Apply</button>

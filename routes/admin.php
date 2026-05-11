@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\Admin\ClubController;
+use App\Http\Controllers\Admin\CourtController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ModulePlaceholderController;
 use App\Http\Controllers\Admin\PermissionController;
+use App\Http\Controllers\Admin\PlayerController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserRoleController;
 use Illuminate\Support\Facades\Route;
@@ -13,8 +16,33 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
     ->group(function (): void {
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
-        Route::get('clubs', [ModulePlaceholderController::class, 'index'])->defaults('module', 'clubs')->name('clubs.index');
-        Route::get('players', [ModulePlaceholderController::class, 'index'])->defaults('module', 'players')->name('players.index');
+        // Clubs CRUD + nested Courts
+        Route::get('clubs', [ClubController::class, 'index'])->name('clubs.index');
+        Route::get('clubs/create', [ClubController::class, 'create'])->name('clubs.create');
+        Route::post('clubs', [ClubController::class, 'store'])->name('clubs.store');
+        Route::get('clubs/{club}', [ClubController::class, 'show'])->name('clubs.show');
+        Route::get('clubs/{club}/edit', [ClubController::class, 'edit'])->name('clubs.edit');
+        Route::put('clubs/{club}', [ClubController::class, 'update'])->name('clubs.update');
+        Route::patch('clubs/{club}/status', [ClubController::class, 'updateStatus'])->name('clubs.status');
+        Route::delete('clubs/{club}', [ClubController::class, 'destroy'])->name('clubs.destroy');
+
+        // Courts (nested under clubs)
+        Route::get('clubs/{club}/courts/create', [CourtController::class, 'create'])->name('clubs.courts.create');
+        Route::post('clubs/{club}/courts', [CourtController::class, 'store'])->name('clubs.courts.store');
+        Route::get('clubs/{club}/courts/{court}/edit', [CourtController::class, 'edit'])->name('clubs.courts.edit');
+        Route::put('clubs/{club}/courts/{court}', [CourtController::class, 'update'])->name('clubs.courts.update');
+        Route::delete('clubs/{club}/courts/{court}', [CourtController::class, 'destroy'])->name('clubs.courts.destroy');
+
+        // Players CRUD
+        Route::get('players', [PlayerController::class, 'index'])->name('players.index');
+        Route::get('players/create', [PlayerController::class, 'create'])->name('players.create');
+        Route::post('players', [PlayerController::class, 'store'])->name('players.store');
+        Route::get('players/{player}', [PlayerController::class, 'show'])->name('players.show');
+        Route::get('players/{player}/edit', [PlayerController::class, 'edit'])->name('players.edit');
+        Route::put('players/{player}', [PlayerController::class, 'update'])->name('players.update');
+        Route::patch('players/{player}/status', [PlayerController::class, 'updateStatus'])->name('players.status');
+        Route::delete('players/{player}', [PlayerController::class, 'destroy'])->name('players.destroy');
+
         Route::get('bookings', [ModulePlaceholderController::class, 'index'])->defaults('module', 'bookings')->name('bookings.index');
         Route::get('courts', [ModulePlaceholderController::class, 'index'])->defaults('module', 'courts')->name('courts.index');
         Route::get('tournaments', [ModulePlaceholderController::class, 'index'])->defaults('module', 'tournaments')->name('tournaments.index');
