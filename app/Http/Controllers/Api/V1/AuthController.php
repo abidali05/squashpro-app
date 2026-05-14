@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
 use App\Models\User;
+use App\Support\ApiErrorCode;
+use App\Support\ApiValidationRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,8 +22,8 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'full_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'string', 'max:25', 'unique:users,phone'],
+            'email' => [...ApiValidationRules::email(), 'max:255'],
+            'phone' => ApiValidationRules::phone(),
             'password' => ['required', Password::min(8)],
         ]);
 
@@ -60,11 +62,11 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'club_name' => ['required', 'string', 'max:255'],
             'owner_manager_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['required', 'string', 'max:25', 'unique:users,phone'],
+            'email' => [...ApiValidationRules::email(), 'max:255'],
+            'phone' => ApiValidationRules::phone(),
             'address' => ['required', 'string', 'max:255'],
             'city' => ['required', 'string', 'max:100'],
-            'number_of_courts' => ['required', 'integer', 'min:1'],
+            'number_of_courts' => ApiValidationRules::numberOfCourts(),
             'working_hours' => ['required', 'string', 'max:100'],
             'password' => ['required', Password::min(8)],
             'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
@@ -116,7 +118,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email'],
-            'otp' => ['required', 'digits:6'],
+            'otp' => ApiValidationRules::otp(),
             'purpose' => ['required', 'in:registration,forgot_password'],
         ]);
 
@@ -236,11 +238,11 @@ class AuthController extends Controller
 
         $validator = Validator::make($request->all(), [
             'profile_image' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
-            'dob' => ['required', 'date'],
-            'gender' => ['required', 'string', 'in:male,female,other'],
+            'dob' => ApiValidationRules::dob(),
+            'gender' => ApiValidationRules::gender(),
             'city' => ['required', 'string', 'max:100'],
-            'playing_level' => ['required', 'in:beginner,intermediate,advanced,professional'],
-            'primary_hand' => ['required', 'in:left,right'],
+            'playing_level' => ApiValidationRules::playingLevel(),
+            'primary_hand' => ApiValidationRules::primaryHand(),
             'bio' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -392,7 +394,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email'],
-            'otp' => ['required', 'digits:6'],
+            'otp' => ApiValidationRules::otp(),
         ]);
 
         if ($validator->fails()) {
@@ -555,6 +557,7 @@ class AuthController extends Controller
         return response()->json([
             'success' => false,
             'message' => 'Validation failed.',
+            'error_code' => ApiErrorCode::VALIDATION_ERROR,
             'errors' => $errors,
         ], 422);
     }

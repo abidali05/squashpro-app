@@ -23,6 +23,7 @@ class EnsureUserHasRole
                 'success' => false,
                 'message' => 'Unauthorized. Authentication required.',
                 'error_code' => 'UNAUTHORIZED',
+                'errors' => new \stdClass(),
             ], 401);
         }
 
@@ -34,6 +35,7 @@ class EnsureUserHasRole
                 'error_code' => 'FORBIDDEN',
                 'required_role' => $role,
                 'user_role' => $user->role,
+                'errors' => new \stdClass(),
             ], 403);
         }
 
@@ -43,6 +45,7 @@ class EnsureUserHasRole
                 'success' => false,
                 'message' => 'Your account has been suspended. Please contact support.',
                 'error_code' => 'ACCOUNT_SUSPENDED',
+                'errors' => new \stdClass(),
             ], 403);
         }
 
@@ -53,6 +56,7 @@ class EnsureUserHasRole
                     ? 'Your club profile is pending admin approval.' 
                     : 'Your club profile has been rejected by admin.',
                 'error_code' => $user->status === 'pending' ? 'CLUB_PENDING_APPROVAL' : 'CLUB_REJECTED',
+                'errors' => new \stdClass(),
             ], 403);
         }
 
