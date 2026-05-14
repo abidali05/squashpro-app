@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\Support\ApiErrorCode;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +17,9 @@ class EnsureApiTokenIsValid
         if (! $token) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized.',
+                'message' => 'Unauthorized. Token is missing or invalid.',
+                'error_code' => ApiErrorCode::UNAUTHORIZED,
+                'errors' => new \stdClass(),
             ], 401);
         }
 
@@ -26,7 +29,9 @@ class EnsureApiTokenIsValid
         if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized.',
+                'message' => 'Unauthorized. Token is missing or invalid.',
+                'error_code' => ApiErrorCode::UNAUTHORIZED,
+                'errors' => new \stdClass(),
             ], 401);
         }
 
