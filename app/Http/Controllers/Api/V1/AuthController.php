@@ -41,6 +41,13 @@ class AuthController extends Controller
             'otp_verified' => false,
         ]);
 
+        $plainAccessToken = bin2hex(random_bytes(32));
+        $plainRefreshToken = bin2hex(random_bytes(32));
+
+        $user->api_access_token = hash('sha256', $plainAccessToken);
+        $user->api_refresh_token = hash('sha256', $plainRefreshToken);
+        $user->save();
+
         $this->assignRoleIfPresent($user, 'player');
         $this->createOtp($user->email, 'registration');
 
@@ -48,11 +55,16 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Player registered successfully. OTP sent to email.',
             'data' => [
-                'user_id' => $user->id,
-                'role' => 'player',
-                'email' => $user->email,
-                'status' => $user->status,
-                'otp_verified' => false,
+                'access_token' => $plainAccessToken,
+                'refresh_token' => $plainRefreshToken,
+                'user' => [
+                    'id' => $user->id,
+                    'role' => $user->role,
+                    'email' => $user->email,
+                    'status' => $user->status,
+                    'otp_verified' => (bool) $user->otp_verified,
+                    'profile_completed' => $this->isPlayerProfileCompleted($user),
+                ],
             ],
         ], 201);
     }
@@ -70,6 +82,8 @@ class AuthController extends Controller
             'working_hours' => ['required', 'string', 'max:100'],
             'password' => ['required', Password::min(8)],
             'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
+            'facilities' => ['nullable', 'array'],
+            'facilities.*' => ['string', 'max:255'],
         ]);
 
         if ($validator->fails()) {
@@ -96,6 +110,7 @@ class AuthController extends Controller
             'number_of_courts' => $request->integer('number_of_courts'),
             'working_hours' => $request->string('working_hours')->toString(),
             'club_logo' => $logoPath,
+            'facilities' => $request->input('facilities', []),
         ]);
 
         $this->assignRoleIfPresent($user, 'club');
