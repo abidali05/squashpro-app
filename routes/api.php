@@ -55,6 +55,7 @@ Route::prefix('v1')->group(function () {
             Route::get('tournaments/{tournament_id}', [ClubController::class, 'tournamentDetail']);
             Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
             Route::get('profile', [ClubController::class, 'profile']);
+            Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             // Add club-specific routes here
             // Route::get('profile', [ClubController::class, 'getProfile']);
             // Route::put('profile', [ClubController::class, 'updateProfile']);

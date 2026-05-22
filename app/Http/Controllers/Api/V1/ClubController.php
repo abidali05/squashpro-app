@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\ClubDashboardResource;
+use App\Http\Resources\Api\V1\ClubDetailResource;
 use App\Http\Resources\Api\V1\ClubCourtsResource;
 use App\Http\Resources\Api\V1\ClubProfileCollection;
 use App\Http\Resources\Api\V1\ClubTournamentsResource;
@@ -12,6 +13,7 @@ use App\Http\Resources\Api\V1\CourtResource;
 use App\Http\Requests\Api\V1\Club\IndexCourtsRequest;
 use App\Http\Requests\Api\V1\Club\IndexTournamentsRequest;
 use App\Http\Requests\Api\V1\Club\SetCourtMaintenanceRequest;
+use App\Http\Requests\Api\V1\Club\UpdateClubDetailsRequest;
 use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
 use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
@@ -35,6 +37,17 @@ class ClubController extends Controller
             'success' => true,
             'message' => 'Club profile fetched successfully.',
             'data' => new ClubProfileCollection(collect([$club])),
+        ]);
+    }
+
+    public function updateClubDetails(UpdateClubDetailsRequest $request): JsonResponse
+    {
+        $club = $this->clubService->updateClubDetails($request->user(), $request->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Club details updated successfully.',
+            'data' => new ClubDetailResource($club),
         ]);
     }
 

@@ -18,6 +18,33 @@ class ClubService
         return $club->loadCount('courts');
     }
 
+    public function updateClubDetails(User $club, array $data): User
+    {
+        return DB::transaction(function () use ($club, $data) {
+            if (array_key_exists('name', $data)) {
+                $club->name = $data['name'];
+                $club->club_name = $data['name'];
+            }
+
+            if (array_key_exists('address', $data)) {
+                $club->address = $data['address'];
+            }
+
+            if (array_key_exists('working_hours', $data)) {
+                $club->working_hours = $data['working_hours'];
+            }
+
+            if (array_key_exists('facilities', $data)) {
+                $club->facilities = $this->normalizeFacilities($data['facilities']);
+            }
+
+            $club->number_of_courts = $club->courts()->count();
+            $club->save();
+
+            return $club->refresh();
+        });
+    }
+
     public function dashboard(User $club): array
     {
         $totalCourts = (int) ($club->number_of_courts ?: $club->courts()->count());
@@ -296,6 +323,25 @@ class ClubService
     private function mapInputStatusToStorage(string $status): string
     {
         return $status === 'maintenance' ? 'maintenance' : 'active';
+    }
+
+    private function normalizeFacilities(mixed $facilities): array
+    {
+        if (is_array($facilities)) {
+            return array_values(array_filter($facilities, fn ($item) => is_string($item) && trim($item) !== ''));
+        }
+
+        if (is_string($facilities)) {
+            $decoded = json_decode($facilities, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $this->normalizeFacilities($decoded);
+            }
+
+            return array_values(array_filter(array_map('trim', explode(',', $facilities))));
+        }
+
+        return [];
     }
 
     private function countClubBookings(int $clubId, bool $todayOnly = false, ?string $status = null): int
