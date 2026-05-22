@@ -15,6 +15,7 @@ class Court extends Model
         'capacity',
         'status',
         'description',
+        'maintenance_note',
     ];
 
     protected function casts(): array

@@ -58,7 +58,7 @@
             <td>{{ $club->name }}</td>
             <td>{{ $club->email }}</td>
             <td>{{ $club->city ?? '—' }}</td>
-            <td>{{ $club->courts_count ?? 0 }}</td>
+            <td>{{ $club->number_of_courts ?? 0 }}</td>
             <td>
                 @php
                     $statusMap = [

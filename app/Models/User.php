@@ -34,6 +34,7 @@ class User extends Authenticatable
         'number_of_courts',
         'working_hours',
         'club_logo',
+        'facilities',
         'profile_image',
         'dob',
         'gender',
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'otp_verified' => 'boolean',
+            'facilities' => 'array',
             'dob' => 'date',
         ];
     }
@@ -70,5 +72,10 @@ class User extends Authenticatable
     public function courts(): HasMany
     {
         return $this->hasMany(Court::class, 'club_id');
+    }
+
+    public function tournaments(): HasMany
+    {
+        return $this->hasMany(Tournament::class, 'club_id');
     }
 }

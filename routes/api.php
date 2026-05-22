@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ClubController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +44,17 @@ Route::prefix('v1')->group(function () {
 
         // Club Routes
         Route::prefix('club')->middleware('api.role:club')->group(function () {
+            Route::get('dashboard', [ClubController::class, 'dashboard']);
+            Route::get('courts', [ClubController::class, 'courts']);
+            Route::post('courts', [ClubController::class, 'storeCourt']);
+            Route::get('courts/{court_id}', [ClubController::class, 'courtDetail']);
+            Route::post('courts/{court_id}/edit', [ClubController::class, 'editCourt']);
+            Route::post('courts/{court_id}/set-maintenance', [ClubController::class, 'setCourtMaintenance']);
+            Route::get('tournaments', [ClubController::class, 'tournaments']);
+            Route::post('tournaments', [ClubController::class, 'storeTournament']);
+            Route::get('tournaments/{tournament_id}', [ClubController::class, 'tournamentDetail']);
+            Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
+            Route::get('profile', [ClubController::class, 'profile']);
             // Add club-specific routes here
             // Route::get('profile', [ClubController::class, 'getProfile']);
             // Route::put('profile', [ClubController::class, 'updateProfile']);
@@ -57,7 +69,5 @@ Route::prefix('v1')->group(function () {
             // Route::post('refresh-token', [AuthController::class, 'refreshToken']);
             // Route::put('change-password', [AuthController::class, 'changePassword']);
         });
-
     });
-
 });
