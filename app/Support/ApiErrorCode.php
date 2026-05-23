@@ -28,4 +28,13 @@ final class ApiErrorCode
     public const SERVER_ERROR = 'SERVER_ERROR';
     public const RECORD_NOT_FOUND = 'RECORD_NOT_FOUND';
     public const DUPLICATE_RESOURCE = 'DUPLICATE_RESOURCE';
+    public const CLUB_NOT_FOUND = 'CLUB_NOT_FOUND';
+    public const COURT_NOT_FOUND = 'COURT_NOT_FOUND';
+    public const COURT_NOT_IN_CLUB = 'COURT_NOT_IN_CLUB';
+    public const INVALID_DATE = 'INVALID_DATE';
+    public const COURT_UNDER_MAINTENANCE = 'COURT_UNDER_MAINTENANCE';
+    public const COURT_UNAVAILABLE = 'COURT_UNAVAILABLE';
+    public const SLOT_ALREADY_BOOKED = 'SLOT_ALREADY_BOOKED';
+    public const CLUB_CLOSED = 'CLUB_CLOSED';
+    public const PAYMENT_FAILED = 'PAYMENT_FAILED';
 }

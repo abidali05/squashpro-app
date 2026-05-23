@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ClubController;
+use App\Http\Controllers\Api\V1\PlayerBookingController;
+use App\Http\Controllers\Api\V1\PlayerClubController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +38,11 @@ Route::prefix('v1')->group(function () {
         // Player Routes
         Route::prefix('player')->middleware('api.role:player')->group(function () {
             Route::post('complete-profile', [AuthController::class, 'completePlayerProfile']);
+            Route::get('clubs', [PlayerClubController::class, 'index']);
+            Route::get('clubs/{club_id}', [PlayerClubController::class, 'show']);
+            Route::get('clubs/{club_id}/courts', [PlayerClubController::class, 'courts']);
+            Route::get('courts/{court_id}/time-slots', [PlayerClubController::class, 'timeSlots']);
+            Route::post('bookings', [PlayerBookingController::class, 'store']);
             // Add more player-specific routes here
             // Route::get('profile', [PlayerController::class, 'getProfile']);
             // Route::put('profile', [PlayerController::class, 'updateProfile']);

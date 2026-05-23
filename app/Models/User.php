@@ -78,4 +78,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Tournament::class, 'club_id');
     }
+
+    public function bookingsAsClub(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'club_id');
+    }
+
+    public function bookingsAsPlayer(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'player_id');
+    }
 }
