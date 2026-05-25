@@ -166,7 +166,7 @@ class PlayerBookingService
                 'booking_date' => $data['booking_date'],
                 'start_time' => $slot->start_time,
                 'end_time' => $slot->end_time,
-                'booking_status' => 'confirmed',
+                'booking_status' => 'pending',
                 'payment_status' => 'paid',
                 'payment_method' => $data['payment_method'],
                 'payment_transaction_id' => $data['payment_transaction_id'],

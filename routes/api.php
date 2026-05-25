@@ -57,12 +57,16 @@ Route::prefix('v1')->group(function () {
             Route::get('courts/{court_id}', [ClubController::class, 'courtDetail']);
             Route::post('courts/{court_id}/edit', [ClubController::class, 'editCourt']);
             Route::post('courts/{court_id}/set-maintenance', [ClubController::class, 'setCourtMaintenance']);
+            Route::get('bookings', [ClubController::class, 'bookings']);
+            Route::get('bookings/{booking_id}', [ClubController::class, 'bookingDetail']);
+            Route::post('bookings/{booking_id}/status', [ClubController::class, 'updateBookingStatus']);
             Route::get('tournaments', [ClubController::class, 'tournaments']);
             Route::post('tournaments', [ClubController::class, 'storeTournament']);
             Route::get('tournaments/{tournament_id}', [ClubController::class, 'tournamentDetail']);
             Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
+            Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
             // Add club-specific routes here
             // Route::get('profile', [ClubController::class, 'getProfile']);
             // Route::put('profile', [ClubController::class, 'updateProfile']);

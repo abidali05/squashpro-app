@@ -12,7 +12,7 @@ class PlayerClubDetailResource extends JsonResource
         return [
             'id' => $this->resource['club_id'],
             'club_name' => $this->resource['club_name'],
-            'images' => $this->resource['images'],
+            'club_logo' => $this->resource['images'][0] ?? null,
             'address' => $this->resource['address'],
             'city' => $this->resource['city'],
             'description' => $this->resource['description'],

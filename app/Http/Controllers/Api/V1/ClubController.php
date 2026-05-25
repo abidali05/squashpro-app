@@ -6,14 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\ClubDashboardResource;
 use App\Http\Resources\Api\V1\ClubDetailResource;
 use App\Http\Resources\Api\V1\ClubCourtsResource;
+use App\Http\Resources\Api\V1\ClubBookingsResource;
 use App\Http\Resources\Api\V1\ClubProfileCollection;
 use App\Http\Resources\Api\V1\ClubTournamentsResource;
 use App\Http\Resources\Api\V1\CourtDetailResource;
 use App\Http\Resources\Api\V1\CourtResource;
+use App\Http\Resources\Api\V1\BookingDetailResource;
 use App\Http\Requests\Api\V1\Club\IndexCourtsRequest;
+use App\Http\Requests\Api\V1\Club\IndexBookingsRequest;
 use App\Http\Requests\Api\V1\Club\IndexTournamentsRequest;
 use App\Http\Requests\Api\V1\Club\SetCourtMaintenanceRequest;
+use App\Http\Requests\Api\V1\Club\UpdateClubLogoRequest;
 use App\Http\Requests\Api\V1\Club\UpdateClubDetailsRequest;
+use App\Http\Requests\Api\V1\Club\UpdateBookingStatusRequest;
 use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
 use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
@@ -47,6 +52,17 @@ class ClubController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Club details updated successfully.',
+            'data' => new ClubDetailResource($club),
+        ]);
+    }
+
+    public function updateClubLogo(UpdateClubLogoRequest $request): JsonResponse
+    {
+        $club = $this->clubService->updateClubLogo($request->user(), $request->file('club_logo'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Club logo updated successfully.',
             'data' => new ClubDetailResource($club),
         ]);
     }
@@ -190,6 +206,52 @@ class ClubController extends Controller
             'data' => [
                 'id' => $tournament->id,
                 'status' => $tournament->status,
+            ],
+        ]);
+    }
+
+    public function bookings(IndexBookingsRequest $request): JsonResponse
+    {
+        $result = $this->clubService->bookings(
+            $request->user(),
+            $request->input('status'),
+            $request->input('date'),
+            $request->filled('limit') ? (int) $request->input('limit') : null,
+            (int) $request->input('page', 1)
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bookings fetched successfully.',
+            'data' => new ClubBookingsResource($result),
+        ]);
+    }
+
+    public function bookingDetail(Request $request, string $booking_id): JsonResponse
+    {
+        $booking = $this->clubService->bookingDetail($request->user(), $booking_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking detail fetched successfully.',
+            'data' => new BookingDetailResource($booking),
+        ]);
+    }
+
+    public function updateBookingStatus(UpdateBookingStatusRequest $request, string $booking_id): JsonResponse
+    {
+        $booking = $this->clubService->updateBookingStatus(
+            $request->user(),
+            $booking_id,
+            $request->input('status')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Booking status updated successfully.',
+            'data' => [
+                'booking_id' => $booking->id,
+                'status' => $booking->booking_status,
             ],
         ]);
     }
