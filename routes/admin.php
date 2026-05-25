@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\Admin\ClubController;
+use App\Http\Controllers\Admin\BookingManagementController;
 use App\Http\Controllers\Admin\CourtController;
+use App\Http\Controllers\Admin\CourtManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ModulePlaceholderController;
+use App\Http\Controllers\Admin\TournamentManagementController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PlayerController;
 use App\Http\Controllers\Admin\RoleController;
@@ -43,9 +46,19 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::patch('players/{player}/status', [PlayerController::class, 'updateStatus'])->name('players.status');
         Route::delete('players/{player}', [PlayerController::class, 'destroy'])->name('players.destroy');
 
-        Route::get('bookings', [ModulePlaceholderController::class, 'index'])->defaults('module', 'bookings')->name('bookings.index');
-        Route::get('courts', [ModulePlaceholderController::class, 'index'])->defaults('module', 'courts')->name('courts.index');
-        Route::get('tournaments', [ModulePlaceholderController::class, 'index'])->defaults('module', 'tournaments')->name('tournaments.index');
+        Route::get('bookings', [BookingManagementController::class, 'index'])->name('bookings.index');
+        Route::get('bookings/{booking}', [BookingManagementController::class, 'show'])->name('bookings.show');
+        Route::post('bookings/{booking}/status', [BookingManagementController::class, 'updateStatus'])->name('bookings.status');
+        Route::get('courts', [CourtManagementController::class, 'index'])->name('courts.index');
+        Route::get('courts/create', [CourtManagementController::class, 'create'])->name('courts.create');
+        Route::post('courts', [CourtManagementController::class, 'store'])->name('courts.store');
+        Route::get('courts/{court}', [CourtManagementController::class, 'show'])->name('courts.show');
+        Route::get('courts/{court}/edit', [CourtManagementController::class, 'edit'])->name('courts.edit');
+        Route::put('courts/{court}', [CourtManagementController::class, 'update'])->name('courts.update');
+        Route::delete('courts/{court}', [CourtManagementController::class, 'destroy'])->name('courts.destroy');
+        Route::get('tournaments', [TournamentManagementController::class, 'index'])->name('tournaments.index');
+        Route::get('tournaments/{tournament}', [TournamentManagementController::class, 'show'])->name('tournaments.show');
+        Route::post('tournaments/{tournament}/status', [TournamentManagementController::class, 'updateStatus'])->name('tournaments.status');
         Route::get('payments', [ModulePlaceholderController::class, 'index'])->defaults('module', 'payments')->name('payments.index');
         Route::get('revenue-reports', [ModulePlaceholderController::class, 'index'])->defaults('module', 'revenue reports')->name('revenue.index');
         Route::get('notifications', [ModulePlaceholderController::class, 'index'])->defaults('module', 'notifications')->name('notifications.index');
