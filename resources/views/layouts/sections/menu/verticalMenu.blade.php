@@ -87,6 +87,21 @@
             </a>
         </li>
 
+        <li class="menu-item {{ request()->routeIs('admin.support-options.*') || request()->routeIs('admin.privacy-policy.*') ? 'open' : '' }}">
+            <a href="#" class="menu-link menu-toggle">
+                <i class="menu-icon tf-icons mdi mdi-file-document-edit-outline"></i>
+                <div>Content Management</div>
+            </a>
+            <ul class="menu-sub">
+                <li class="menu-item {{ request()->routeIs('admin.support-options.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.support-options.index') }}" class="menu-link"><div>Help & Support</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.privacy-policy.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.privacy-policy.edit') }}" class="menu-link"><div>Privacy Policy</div></a>
+                </li>
+            </ul>
+        </li>
+
         <li class="menu-item {{ request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*') || request()->routeIs('admin.users.*') ? 'open' : '' }}">
             <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-shield-account-outline"></i>

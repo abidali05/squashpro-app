@@ -12,9 +12,11 @@ abstract class BaseApiRequest extends FormRequest
     protected function failedValidation(Validator $validator): void
     {
         throw new HttpResponseException(response()->json([
-            'success' => false,
+            'status' => false,
             'message' => 'Validation failed.',
-            'error_code' => ApiErrorCode::VALIDATION_ERROR,
+            'error' => [
+                'code' => ApiErrorCode::VALIDATION_ERROR,
+            ],
             'errors' => $validator->errors(),
         ], 422));
     }

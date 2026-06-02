@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Court extends Model
@@ -29,5 +30,15 @@ class Court extends Model
     public function club(): BelongsTo
     {
         return $this->belongsTo(User::class, 'club_id');
+    }
+
+    public function timeSlots(): HasMany
+    {
+        return $this->hasMany(CourtTimeSlot::class, 'court_id');
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'court_id');
     }
 }

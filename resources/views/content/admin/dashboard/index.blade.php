@@ -20,10 +20,10 @@
             <p class="app-page-header__subtitle">Squash Pro platform overview and key metrics</p>
         </div>
         <div class="app-page-header__actions">
-            <button type="button" class="app-btn-secondary">
+            <button type="button" class="app-btn-secondary" onclick="window.print()">
                 <i class="mdi mdi-download"></i> Export Report
             </button>
-            <button type="button" class="app-btn-primary">
+            <button type="button" class="app-btn-primary" onclick="window.location.reload()">
                 <i class="mdi mdi-refresh"></i> Refresh Data
             </button>
         </div>
@@ -54,14 +54,14 @@
         <div class="chart-card-header">
             <div>
                 <h5 class="chart-card-title">Platform Overview</h5>
-                <p class="chart-card-subtitle">Monthly performance metrics across all modules</p>
+                <p class="chart-card-subtitle">Platform activity across the selected period</p>
             </div>
             <div class="chart-card-actions">
                 <select class="form-select form-select-sm" id="chartPeriod">
-                    <option value="7">Last 7 Days</option>
-                    <option value="30" selected>Last 30 Days</option>
-                    <option value="90">Last 90 Days</option>
-                    <option value="365">Last Year</option>
+                    <option value="7" @selected(($period ?? 30) === 7)>Last 7 Days</option>
+                    <option value="30" @selected(($period ?? 30) === 30)>Last 30 Days</option>
+                    <option value="90" @selected(($period ?? 30) === 90)>Last 90 Days</option>
+                    <option value="365" @selected(($period ?? 30) === 365)>Last Year</option>
                 </select>
             </div>
         </div>
@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function() {
             y: {
                 formatter: function(value, { seriesIndex }) {
                     if (seriesIndex === 1) {
-                        return '$' + value + 'K';
+                        return 'PKR ' + value + 'K';
                     }
                     return value;
                 }
@@ -276,8 +276,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chart period change handler
     document.getElementById('chartPeriod').addEventListener('change', function() {
-        // In real implementation, this would fetch new data
-        console.log('Period changed to:', this.value);
+        const url = new URL(window.location.href);
+        url.searchParams.set('period', this.value);
+        window.location.href = url.toString();
     });
 });
 </script>

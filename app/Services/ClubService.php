@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Booking;
 use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\User;
@@ -16,6 +17,44 @@ class ClubService
     public function profile(User $club): User
     {
         return $club->loadCount('courts');
+    }
+
+    public function updateClubDetails(User $club, array $data): User
+    {
+        return DB::transaction(function () use ($club, $data) {
+            if (array_key_exists('name', $data)) {
+                $club->name = $data['name'];
+                $club->club_name = $data['name'];
+            }
+
+            if (array_key_exists('address', $data)) {
+                $club->address = $data['address'];
+            }
+
+            if (array_key_exists('working_hours', $data)) {
+                $club->working_hours = $data['working_hours'];
+            }
+
+            if (array_key_exists('facilities', $data)) {
+                $club->facilities = $this->normalizeFacilities($data['facilities']);
+            }
+
+            $club->number_of_courts = $club->courts()->count();
+            $club->save();
+
+            return $club->refresh();
+        });
+    }
+
+    public function updateClubLogo(User $club, UploadedFile $logoFile): User
+    {
+        return DB::transaction(function () use ($club, $logoFile) {
+            $this->deleteStoredClubLogo($club->club_logo);
+            $club->club_logo = $this->storeUploadedClubLogo($logoFile);
+            $club->save();
+
+            return $club->refresh();
+        });
     }
 
     public function dashboard(User $club): array
@@ -151,6 +190,55 @@ class ClubService
         ];
     }
 
+    public function bookings(User $club, ?string $status = null, ?string $date = null, ?int $limit = null, int $page = 1): array
+    {
+        $allBookings = $club->bookingsAsClub()
+            ->with(['player:id,name', 'court:id,name'])
+            ->orderByDesc('id')
+            ->get();
+
+        $query = $club->bookingsAsClub()
+            ->with(['player:id,name', 'court:id,name'])
+            ->orderByDesc('id');
+
+        if ($status && in_array($status, ['pending', 'confirmed', 'cancelled'], true)) {
+            $query->where('booking_status', $status);
+        }
+
+        if ($date) {
+            $query->whereDate('booking_date', $date);
+        }
+
+        $bookings = $limit
+            ? collect($query->paginate($limit, ['*'], 'page', $page)->items())
+            : $query->get();
+
+        return [
+            'counts' => [
+                'pending_bookings' => $allBookings->where('booking_status', 'pending')->count(),
+                'confirmed_bookings' => $allBookings->where('booking_status', 'confirmed')->count(),
+                'cancelled_bookings' => $allBookings->where('booking_status', 'cancelled')->count(),
+            ],
+            'bookings' => $bookings,
+        ];
+    }
+
+    public function bookingDetail(User $club, string $bookingId): Booking
+    {
+        return $this->findClubBooking($club, $bookingId);
+    }
+
+    public function updateBookingStatus(User $club, string $bookingId, string $status): Booking
+    {
+        return DB::transaction(function () use ($club, $bookingId, $status) {
+            $booking = $this->findClubBooking($club, $bookingId);
+            $booking->booking_status = $status;
+            $booking->save();
+
+            return $booking->refresh()->load(['player', 'court']);
+        });
+    }
+
     public function tournamentDetail(User $club, string $tournamentId): Tournament
     {
         return $this->findClubTournament($club, $tournamentId);
@@ -262,6 +350,24 @@ class ClubService
         return $tournament;
     }
 
+    private function findClubBooking(User $club, string $bookingId): Booking
+    {
+        if (! ctype_digit($bookingId)) {
+            throw (new ModelNotFoundException())->setModel(Booking::class, [$bookingId]);
+        }
+
+        $booking = $club->bookingsAsClub()
+            ->with(['player', 'court'])
+            ->whereKey((int) $bookingId)
+            ->first();
+
+        if (! $booking) {
+            throw (new ModelNotFoundException())->setModel(Booking::class, [$bookingId]);
+        }
+
+        return $booking;
+    }
+
     private function storeTournamentImage(?UploadedFile $file, mixed $existingValue): ?string
     {
         if ($file) {
@@ -278,6 +384,24 @@ class ClubService
     private function storeUploadedTournamentImage(UploadedFile $file): string
     {
         return $file->store('tournament-images', 'public');
+    }
+
+    private function storeUploadedClubLogo(UploadedFile $file): string
+    {
+        return $file->store('club-logos', 'public');
+    }
+
+    private function deleteStoredClubLogo(?string $value): void
+    {
+        if (! $value) {
+            return;
+        }
+
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return;
+        }
+
+        Storage::disk('public')->delete($value);
     }
 
     private function deleteStoredTournamentImage(?string $value): void
@@ -298,20 +422,35 @@ class ClubService
         return $status === 'maintenance' ? 'maintenance' : 'active';
     }
 
+    private function normalizeFacilities(mixed $facilities): array
+    {
+        if (is_array($facilities)) {
+            return array_values(array_filter($facilities, fn ($item) => is_string($item) && trim($item) !== ''));
+        }
+
+        if (is_string($facilities)) {
+            $decoded = json_decode($facilities, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $this->normalizeFacilities($decoded);
+            }
+
+            return array_values(array_filter(array_map('trim', explode(',', $facilities))));
+        }
+
+        return [];
+    }
+
     private function countClubBookings(int $clubId, bool $todayOnly = false, ?string $status = null): int
     {
-        if (! Schema::hasTable('bookings')) {
-            return 0;
-        }
-
         $query = DB::table('bookings')->where('club_id', $clubId);
 
-        if ($todayOnly && Schema::hasColumn('bookings', 'created_at')) {
-            $query->whereDate('created_at', now()->toDateString());
+        if ($todayOnly && Schema::hasColumn('bookings', 'booking_date')) {
+            $query->whereDate('booking_date', now()->toDateString());
         }
 
-        if ($status !== null && Schema::hasColumn('bookings', 'status')) {
-            $query->where('status', $status);
+        if ($status !== null && Schema::hasColumn('bookings', 'booking_status')) {
+            $query->where('booking_status', $status);
         }
 
         return (int) $query->count();

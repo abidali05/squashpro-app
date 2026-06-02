@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use Spatie\Permission\Models\Role;
@@ -498,6 +499,96 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Password reset successfully. Please login with your new password.',
+        ]);
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Token is missing or invalid.',
+                'error_code' => ApiErrorCode::UNAUTHORIZED,
+                'errors' => new \stdClass(),
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', Password::min(8), 'different:current_password'],
+            'confirm_password' => ['required', 'same:new_password'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator->errors()->toArray());
+        }
+
+        if (! Hash::check($request->string('current_password')->toString(), $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Current password is incorrect.',
+                'error_code' => ApiErrorCode::INVALID_CREDENTIALS,
+            ], 422);
+        }
+
+        $user->password = Hash::make($request->string('new_password')->toString());
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully.',
+        ]);
+    }
+
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Token is missing or invalid.',
+                'error_code' => ApiErrorCode::UNAUTHORIZED,
+                'errors' => new \stdClass(),
+            ], 401);
+        }
+
+        $filesToDelete = array_values(array_filter([
+            $user->profile_image,
+            $user->club_logo,
+        ]));
+
+        DB::transaction(function () use ($user) {
+            DB::table('court_time_slots')
+                ->whereIn('booking_id', function ($query) use ($user) {
+                    $query->select('id')
+                        ->from('bookings')
+                        ->where('player_id', $user->id);
+                })
+                ->update([
+                    'status' => 'available',
+                    'booking_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            DB::table('auth_otps')->where('email', $user->email)->delete();
+            DB::table('password_reset_otp_tokens')->where('email', $user->email)->delete();
+
+            $user->roles()->detach();
+            $user->delete();
+        });
+
+        foreach ($filesToDelete as $path) {
+            if (! str_starts_with($path, 'http://') && ! str_starts_with($path, 'https://')) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Account deleted successfully.',
         ]);
     }
 
