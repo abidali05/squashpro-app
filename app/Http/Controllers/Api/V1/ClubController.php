@@ -24,6 +24,7 @@ use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
 use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
 use App\Http\Resources\Api\V1\TournamentDetailResource;
+use App\Models\TournamentRegistration;
 use App\Services\ClubService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -173,6 +174,51 @@ class ClubController extends Controller
         ]);
     }
 
+    public function tournamentEnrolledUsers(Request $request, string $tournament_id): JsonResponse
+    {
+        $tournament = $this->clubService->tournamentDetail($request->user(), $tournament_id);
+
+        $perPage = in_array((int) $request->integer('limit', 10), [10, 25, 50, 100], true)
+            ? (int) $request->integer('limit', 10) : 10;
+        $page = max(1, (int) $request->integer('page', 1));
+
+        $registrations = TournamentRegistration::query()
+            ->with('player')
+            ->where('tournament_id', $tournament->id)
+            ->where('registration_status', 'registered')
+            ->latest()
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        $enrolledUsers = collect($registrations->items())
+            ->map(fn (TournamentRegistration $registration) => [
+                'id' => $registration->player_id,
+                'name' => $registration->player?->name,
+                'email' => $registration->player?->email,
+                'phone' => $registration->player?->phone,
+                'profile_image' => $this->imageUrl($registration->player?->profile_image),
+                'enrollment_status' => $registration->registration_status,
+                'enrolled_at' => $registration->created_at?->format('Y-m-d H:i:s'),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament enrolled users fetched successfully.',
+            'data' => [
+                'tournament_id' => $tournament->id,
+                'tournament_title' => $tournament->name,
+                'total_enrolled_users' => $registrations->total(),
+                'enrolled_users' => $enrolledUsers,
+                'pagination' => [
+                    'current_page' => $registrations->currentPage(),
+                    'per_page' => $registrations->perPage(),
+                    'total_records' => $registrations->total(),
+                    'total_pages' => $registrations->lastPage(),
+                ],
+            ],
+        ]);
+    }
+
     public function storeTournament(StoreTournamentRequest $request): JsonResponse
     {
         $tournament = $this->clubService->storeTournament(
@@ -254,5 +300,18 @@ class ClubController extends Controller
                 'status' => $booking->booking_status,
             ],
         ]);
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return asset('storage/' . $path);
     }
 }

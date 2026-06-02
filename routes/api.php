@@ -1,9 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BookingReviewController;
 use App\Http\Controllers\Api\V1\ClubController;
+use App\Http\Controllers\Api\V1\PlayerContentController;
+use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerBookingController;
 use App\Http\Controllers\Api\V1\PlayerClubController;
+use App\Http\Controllers\Api\V1\PlayerNotificationController;
+use App\Http\Controllers\Api\V1\PlayerProfileController;
+use App\Http\Controllers\Api\V1\PlayerTournamentController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,6 +18,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     Route::get('/cities', [PublicCityController::class, 'index']);
+    Route::get('/help-support', [PlayerContentController::class, 'helpSupport']);
+    Route::get('/privacy-policy', [PlayerContentController::class, 'privacyPolicy']);
 
     // Public Auth Routes (No Authentication Required)
     Route::prefix('auth')->group(function () {
@@ -34,19 +42,24 @@ Route::prefix('v1')->group(function () {
 
     // Protected Routes (Authentication Required)
     Route::middleware('api.token')->group(function () {
-
         // Player Routes
         Route::prefix('player')->middleware('api.role:player')->group(function () {
             Route::post('complete-profile', [AuthController::class, 'completePlayerProfile']);
+            Route::get('dashboard', [PlayerDashboardController::class, 'index']);
             Route::get('clubs', [PlayerClubController::class, 'index']);
             Route::get('clubs/{club_id}', [PlayerClubController::class, 'show']);
             Route::get('clubs/{club_id}/courts', [PlayerClubController::class, 'courts']);
             Route::get('courts/{court_id}/time-slots', [PlayerClubController::class, 'timeSlots']);
+            Route::get('bookings', [PlayerBookingController::class, 'index']);
             Route::post('bookings', [PlayerBookingController::class, 'store']);
-            // Add more player-specific routes here
-            // Route::get('profile', [PlayerController::class, 'getProfile']);
-            // Route::put('profile', [PlayerController::class, 'updateProfile']);
-            // Route::get('bookings', [PlayerBookingController::class, 'index']);
+            Route::get('booking/{booking_id}', [PlayerBookingController::class, 'show']);
+            Route::post('booking/cancel', [PlayerBookingController::class, 'cancel']);
+            Route::post('bookings/{booking_id}/review', [BookingReviewController::class, 'store']);
+            Route::get('profile', [PlayerProfileController::class, 'show']);
+            Route::get('tournaments', [PlayerTournamentController::class, 'index']);
+            Route::get('tournament/{tournament_id}', [PlayerTournamentController::class, 'show']);
+            Route::get('payment-methods', [PlayerTournamentController::class, 'paymentMethods']);
+            Route::post('tournament/register', [PlayerTournamentController::class, 'register']);
         });
 
         // Club Routes
@@ -63,23 +76,20 @@ Route::prefix('v1')->group(function () {
             Route::get('tournaments', [ClubController::class, 'tournaments']);
             Route::post('tournaments', [ClubController::class, 'storeTournament']);
             Route::get('tournaments/{tournament_id}', [ClubController::class, 'tournamentDetail']);
+            Route::get('tournaments/{tournament_id}/enrolled-users', [ClubController::class, 'tournamentEnrolledUsers']);
             Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
-            // Add club-specific routes here
-            // Route::get('profile', [ClubController::class, 'getProfile']);
-            // Route::put('profile', [ClubController::class, 'updateProfile']);
-            // Route::get('courts', [ClubCourtController::class, 'index']);
-            // Route::post('courts', [ClubCourtController::class, 'store']);
         });
 
         // Common Authenticated Routes (Both Player & Club)
         Route::prefix('account')->group(function () {
-            // Route::get('me', [AuthController::class, 'getAuthenticatedUser']);
-            // Route::post('logout', [AuthController::class, 'logout']);
-            // Route::post('refresh-token', [AuthController::class, 'refreshToken']);
-            // Route::put('change-password', [AuthController::class, 'changePassword']);
+            Route::post('delete', [AuthController::class, 'deleteAccount']);
+            Route::post('change-password', [AuthController::class, 'changePassword']);
+            Route::get('notifications', [PlayerNotificationController::class, 'index']);
+            Route::patch('notifications/read-all', [PlayerNotificationController::class, 'markAllAsRead']);
+            Route::patch('notifications/{notification_id}/read', [PlayerNotificationController::class, 'markAsRead']);
         });
     });
 });

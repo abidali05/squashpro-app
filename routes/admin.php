@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\CourtController;
 use App\Http\Controllers\Admin\CourtManagementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ModulePlaceholderController;
+use App\Http\Controllers\Admin\PrivacyPolicyController;
+use App\Http\Controllers\Admin\SupportOptionController;
 use App\Http\Controllers\Admin\TournamentManagementController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PlayerController;
@@ -64,6 +66,10 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('notifications', [ModulePlaceholderController::class, 'index'])->defaults('module', 'notifications')->name('notifications.index');
         Route::get('reports', [ModulePlaceholderController::class, 'index'])->defaults('module', 'reports')->name('reports.index');
         Route::get('settings', [ModulePlaceholderController::class, 'index'])->defaults('module', 'settings')->name('settings.index');
+
+        Route::resource('support-options', SupportOptionController::class)->except(['show']);
+        Route::get('privacy-policy', [PrivacyPolicyController::class, 'edit'])->name('privacy-policy.edit');
+        Route::put('privacy-policy', [PrivacyPolicyController::class, 'update'])->name('privacy-policy.update');
 
         Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
         Route::get('roles/create', [RoleController::class, 'create'])->name('roles.create');

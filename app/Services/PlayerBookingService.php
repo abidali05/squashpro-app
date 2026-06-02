@@ -185,6 +185,93 @@ class PlayerBookingService
         });
     }
 
+    public function playerBookings(User $player, ?string $filter = null, int $page = 1, int $limit = 10): array
+    {
+        $today = Carbon::today('Asia/Karachi')->toDateString();
+
+        $query = Booking::query()
+            ->with(['club', 'court'])
+            ->where('player_id', $player->id);
+
+        match ($filter) {
+            'upcoming' => $query
+                ->whereNotIn('booking_status', ['cancelled', 'completed', 'failed'])
+                ->whereDate('booking_date', '>=', $today),
+            // 'completed' => $query
+            //     ->where(function ($query) use ($today) {
+            //         $query->where('booking_status', 'completed')
+            //             ->orWhere(function ($query) use ($today) {
+            //                 $query->whereDate('booking_date', '<', $today)
+            //                     ->whereNotIn('booking_status', ['cancelled', 'failed']);
+            //             });
+            //     }),
+            'completed' => $query->where('booking_status', 'completed'),
+            'cancelled' => $query->where('booking_status', 'cancelled'),
+            default => null,
+        };
+
+        $bookings = $query
+            ->orderByDesc('booking_date')
+            ->orderByDesc('start_time')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        return [
+            'items' => $bookings->items(),
+            'pagination' => $this->pagination($bookings, $limit),
+        ];
+    }
+
+    public function playerBookingDetail(User $player, int $bookingId): Booking
+    {
+        $booking = Booking::query()
+            ->with(['club', 'court'])
+            ->whereKey($bookingId)
+            ->where('player_id', $player->id)
+            ->first();
+
+        if (! $booking) {
+            $this->apiError('Booking does not exist.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+        }
+
+        return $booking;
+    }
+
+    public function cancelBooking(User $player, int $bookingId): Booking
+    {
+        return DB::transaction(function () use ($player, $bookingId) {
+            $booking = Booking::query()
+                ->with(['club', 'court', 'slot'])
+                ->whereKey($bookingId)
+                ->where('player_id', $player->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $booking) {
+                $this->apiError('Booking does not exist.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+            }
+
+            if (in_array($booking->booking_status, ['cancelled', 'completed', 'failed'], true)) {
+                $this->apiError('This booking cannot be cancelled.', ApiErrorCode::VALIDATION_ERROR);
+            }
+
+            if (! $this->isUpcomingBooking($booking)) {
+                $this->apiError('Only upcoming bookings can be cancelled.', ApiErrorCode::VALIDATION_ERROR);
+            }
+
+            $booking->booking_status = 'cancelled';
+            $booking->save();
+
+            if ($booking->slot) {
+                $booking->slot->update([
+                    'status' => 'available',
+                    'booking_id' => null,
+                ]);
+            }
+
+            return $booking->refresh()->load(['club', 'court']);
+        });
+    }
+
     private function clubSummary(User $club): array
     {
         $workingHours = $this->parseWorkingHours($club->working_hours);
@@ -346,6 +433,35 @@ class PlayerBookingService
         $numeric = (float) ($value ?? 0);
 
         return $numeric == (int) $numeric ? (int) $numeric : $numeric;
+    }
+
+    private function pagination(LengthAwarePaginator $paginator, int $limit): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'limit' => $limit,
+            'total_records' => $paginator->total(),
+            'total_pages' => $paginator->lastPage(),
+        ];
+    }
+
+    private function isUpcomingBooking(Booking $booking): bool
+    {
+        $bookingDate = $booking->booking_date?->toDateString();
+        $today = Carbon::today('Asia/Karachi')->toDateString();
+
+        if ($bookingDate > $today) {
+            return true;
+        }
+
+        if ($bookingDate < $today) {
+            return false;
+        }
+
+        $startTime = Carbon::createFromFormat('H:i:s', (string) $booking->start_time, 'Asia/Karachi')
+            ->setDateFrom(Carbon::now('Asia/Karachi'));
+
+        return $startTime->greaterThan(Carbon::now('Asia/Karachi'));
     }
 
     private function slotWithinClubHours(CourtTimeSlot $slot, array $workingHours): bool
