@@ -10,7 +10,6 @@ class PlayerProfileResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-
         return [
             'id' => $this->id,
             'player_image' => $this->imageUrl($this->profile_image),
