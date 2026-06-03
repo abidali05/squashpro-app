@@ -56,6 +56,8 @@ Route::prefix('v1')->group(function () {
             Route::post('booking/cancel', [PlayerBookingController::class, 'cancel']);
             Route::post('bookings/{booking_id}/review', [BookingReviewController::class, 'store']);
             Route::get('profile', [PlayerProfileController::class, 'show']);
+            Route::post('details/update', [PlayerProfileController::class, 'updatePlayerDetails']);
+            Route::post('logo/update', [PlayerProfileController::class, 'updatePlayerLogo']);
             Route::get('tournaments', [PlayerTournamentController::class, 'index']);
             Route::get('tournament/{tournament_id}', [PlayerTournamentController::class, 'show']);
             Route::get('payment-methods', [PlayerTournamentController::class, 'paymentMethods']);
