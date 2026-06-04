@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\User;
+use App\Notifications\Booking\BookingStatusUpdatedNotification;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -235,7 +236,13 @@ class ClubService
             $booking->booking_status = $status;
             $booking->save();
 
-            return $booking->refresh()->load(['player', 'court']);
+            $booking = $booking->refresh()->load(['player', 'court', 'club']);
+
+            if (in_array($status, ['confirmed', 'cancelled'], true)) {
+                $booking->player->notify((new BookingStatusUpdatedNotification($booking))->afterCommit());
+            }
+
+            return $booking;
         });
     }
 

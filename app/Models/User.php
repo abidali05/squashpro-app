@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -106,9 +107,22 @@ class User extends Authenticatable
         return $this->hasMany(BookingReview::class, 'club_id');
     }
 
-    public function appNotifications(): HasMany
+    public function appNotifications(): MorphMany
     {
-        return $this->hasMany(AppNotification::class);
+        return $this->morphMany(AppNotification::class, 'notifiable');
+    }
+
+    public function fcmTokens(): HasMany
+    {
+        return $this->hasMany(UserFcmToken::class);
+    }
+
+    public function routeNotificationForFcm(): ?string
+    {
+        return $this->fcmTokens()
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('id')
+            ->value('token');
     }
 
     public function cityRelation(): BelongsTo
