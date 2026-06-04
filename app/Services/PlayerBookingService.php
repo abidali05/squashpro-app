@@ -6,6 +6,8 @@ use App\Models\Booking;
 use App\Models\Court;
 use App\Models\CourtTimeSlot;
 use App\Models\User;
+use App\Notifications\Booking\BookingCancelledByPlayerNotification;
+use App\Notifications\Booking\BookingCreatedNotification;
 use App\Support\ApiErrorCode;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -181,7 +183,10 @@ class PlayerBookingService
                 'booking_id' => $booking->id,
             ]);
 
-            return $booking->load(['club', 'court', 'player', 'slot']);
+            $booking = $booking->load(['club', 'court', 'player', 'slot']);
+            $booking->club->notify((new BookingCreatedNotification($booking))->afterCommit());
+
+            return $booking;
         });
     }
 
@@ -268,7 +273,10 @@ class PlayerBookingService
                 ]);
             }
 
-            return $booking->refresh()->load(['club', 'court']);
+            $booking = $booking->refresh()->load(['club', 'court', 'player']);
+            $booking->club->notify((new BookingCancelledByPlayerNotification($booking))->afterCommit());
+
+            return $booking;
         });
     }
 

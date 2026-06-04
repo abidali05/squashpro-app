@@ -1,12 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\V1\AccountFcmTokenController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingReviewController;
 use App\Http\Controllers\Api\V1\ClubController;
-use App\Http\Controllers\Api\V1\PlayerContentController;
-use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerBookingController;
 use App\Http\Controllers\Api\V1\PlayerClubController;
+use App\Http\Controllers\Api\V1\PlayerContentController;
+use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerNotificationController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
@@ -89,9 +91,13 @@ Route::prefix('v1')->group(function () {
         Route::prefix('account')->group(function () {
             Route::post('delete', [AuthController::class, 'deleteAccount']);
             Route::post('change-password', [AuthController::class, 'changePassword']);
-            Route::get('notifications', [PlayerNotificationController::class, 'index']);
-            Route::patch('notifications/read-all', [PlayerNotificationController::class, 'markAllAsRead']);
-            Route::patch('notifications/{notification_id}/read', [PlayerNotificationController::class, 'markAsRead']);
+            Route::get('notifications', [NotificationController::class, 'index']);
+            Route::get('get-notifications', [NotificationController::class, 'index']);
+            Route::get('notifications/unread', [NotificationController::class, 'unread']);
+            Route::get('notifications/unread-count', [NotificationController::class, 'unread_count']);
+            Route::post('notifications/{id}/read', [NotificationController::class, 'mark_as_read']);
+            Route::post('notifications/read-all', [NotificationController::class, 'mark_all_as_read']);
+            Route::post('fcm-token', [AccountFcmTokenController::class, 'store']);
         });
     });
 });
