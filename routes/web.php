@@ -1,8 +1,19 @@
 <?php
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', [AuthenticatedSessionController::class, 'create'])->name('home');
+
+Route::get('/test-queue-worker', function () {
+
+    Artisan::call('queue:work database --queue=notifications --stop-when-empty');
+
+    return [
+        'message' => 'Notifications queue processed until empty',
+        'output' => Artisan::output(),
+    ];
+});
 
 Route::get('/dashboard', function () {
     $user = auth()->user();

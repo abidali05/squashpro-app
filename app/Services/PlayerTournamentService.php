@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Tournament;
 use App\Models\TournamentRegistration;
 use App\Models\User;
+use App\Notifications\Tournament\TournamentRegisteredNotification;
 use App\Support\ApiErrorCode;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -119,7 +120,10 @@ class PlayerTournamentService
             }
             $tournament->save();
 
-            return $registration->load(['tournament']);
+            $registration = $registration->load(['tournament.club', 'player']);
+            $registration->tournament->club?->notify((new TournamentRegisteredNotification($registration))->afterCommit());
+
+            return $registration;
         });
     }
 

@@ -7,6 +7,9 @@ use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\User;
 use App\Notifications\Booking\BookingStatusUpdatedNotification;
+use App\Notifications\Court\CourtCreatedNotification;
+use App\Notifications\Court\CourtMaintenanceNotification;
+use App\Notifications\Tournament\TournamentCreatedNotification;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -121,7 +124,10 @@ class ClubService
                 'maintenance_note' => $data['maintenance_note'] ?? null,
             ]);
 
-            return $court->refresh();
+            $court = $court->refresh()->load('club');
+            $this->notifyCityPlayersAboutCourtCreated($club, $court);
+
+            return $court;
         });
     }
 
@@ -164,7 +170,10 @@ class ClubService
             $court->maintenance_note = $reason;
             $court->save();
 
-            return $court->refresh();
+            $court = $court->refresh()->load('club');
+            $this->notifyCityPlayersAboutCourtMaintenance($club, $court);
+
+            return $court;
         });
     }
 
@@ -269,7 +278,10 @@ class ClubService
                 'rules' => $data['rules'] ?? null,
             ]);
 
-            return $tournament->refresh();
+            $tournament = $tournament->refresh()->load('club');
+            $this->notifyCityPlayersAboutTournament($club, $tournament);
+
+            return $tournament;
         });
     }
 
@@ -422,6 +434,60 @@ class ClubService
         }
 
         Storage::disk('public')->delete($value);
+    }
+
+    private function notifyCityPlayersAboutTournament(User $club, Tournament $tournament): void
+    {
+        if (! $club->city_id && ! $club->city) {
+            return;
+        }
+
+        User::query()
+            ->where('role', 'player')
+            ->where('status', 'active')
+            ->when($club->city_id, fn ($query) => $query->where('city_id', $club->city_id))
+            ->when(! $club->city_id && $club->city, fn ($query) => $query->where('city', $club->city))
+            ->chunkById(100, function ($players) use ($tournament) {
+                $players->each(
+                    fn (User $player) => $player->notify((new TournamentCreatedNotification($tournament))->afterCommit())
+                );
+            });
+    }
+
+    private function notifyCityPlayersAboutCourtCreated(User $club, Court $court): void
+    {
+        if (! $club->city_id && ! $club->city) {
+            return;
+        }
+
+        User::query()
+            ->where('role', 'player')
+            ->where('status', 'active')
+            ->when($club->city_id, fn ($query) => $query->where('city_id', $club->city_id))
+            ->when(! $club->city_id && $club->city, fn ($query) => $query->where('city', $club->city))
+            ->chunkById(100, function ($players) use ($court) {
+                $players->each(
+                    fn (User $player) => $player->notify((new CourtCreatedNotification($court))->afterCommit())
+                );
+            });
+    }
+
+    private function notifyCityPlayersAboutCourtMaintenance(User $club, Court $court): void
+    {
+        if (! $club->city_id && ! $club->city) {
+            return;
+        }
+
+        User::query()
+            ->where('role', 'player')
+            ->where('status', 'active')
+            ->when($club->city_id, fn ($query) => $query->where('city_id', $club->city_id))
+            ->when(! $club->city_id && $club->city, fn ($query) => $query->where('city', $club->city))
+            ->chunkById(100, function ($players) use ($court) {
+                $players->each(
+                    fn (User $player) => $player->notify((new CourtMaintenanceNotification($court))->afterCommit())
+                );
+            });
     }
 
     private function mapInputStatusToStorage(string $status): string
