@@ -22,6 +22,7 @@ class PlayerTournamentController extends Controller
         $filter = $request->string('filter')->toString() ?: $request->string('status')->toString();
 
         $payload = $this->playerTournamentService->tournaments(
+            $request->user(),
             $filter ?: null,
             (int) $request->integer('page', 1),
             (int) $request->integer('limit', 10)
@@ -37,7 +38,7 @@ class PlayerTournamentController extends Controller
 
     public function show(Request $request, string $tournament_id): JsonResponse
     {
-        $tournament = $this->playerTournamentService->detail((int) $tournament_id);
+        $tournament = $this->playerTournamentService->detail($request->user(), (int) $tournament_id);
 
         return response()->json([
             'success' => true,

@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\V1\PlayerBookingController;
 use App\Http\Controllers\Api\V1\PlayerClubController;
 use App\Http\Controllers\Api\V1\PlayerContentController;
 use App\Http\Controllers\Api\V1\PlayerDashboardController;
-use App\Http\Controllers\Api\V1\PlayerNotificationController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
 use App\Http\Controllers\Api\V1\PublicCityController;

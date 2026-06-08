@@ -289,7 +289,8 @@ class ClubController extends Controller
         $booking = $this->clubService->updateBookingStatus(
             $request->user(),
             $booking_id,
-            $request->input('status')
+            $request->input('status'),
+            $request->input('rejection_reason', $request->input('reason'))
         );
 
         return response()->json([

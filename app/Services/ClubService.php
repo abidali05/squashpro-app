@@ -10,7 +10,10 @@ use App\Notifications\Booking\BookingStatusUpdatedNotification;
 use App\Notifications\Court\CourtCreatedNotification;
 use App\Notifications\Court\CourtMaintenanceNotification;
 use App\Notifications\Tournament\TournamentCreatedNotification;
+use App\Support\ApiErrorCode;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -238,11 +241,17 @@ class ClubService
         return $this->findClubBooking($club, $bookingId);
     }
 
-    public function updateBookingStatus(User $club, string $bookingId, string $status): Booking
+    public function updateBookingStatus(User $club, string $bookingId, string $status, ?string $rejectionReason = null): Booking
     {
-        return DB::transaction(function () use ($club, $bookingId, $status) {
+        return DB::transaction(function () use ($club, $bookingId, $status, $rejectionReason) {
             $booking = $this->findClubBooking($club, $bookingId);
+
+            if ($status === 'confirmed' && ! $this->isUpcomingBooking($booking)) {
+                $this->apiError('Past bookings cannot be confirmed.', ApiErrorCode::VALIDATION_ERROR);
+            }
+
             $booking->booking_status = $status;
+            $booking->rejection_reason = $status === 'cancelled' ? $rejectionReason : null;
             $booking->save();
 
             $booking = $booking->refresh()->load(['player', 'court', 'club']);
@@ -542,5 +551,33 @@ class ClubService
         }
 
         return (int) $query->count();
+    }
+
+    private function isUpcomingBooking(Booking $booking): bool
+    {
+        $bookingDate = $booking->booking_date?->toDateString();
+        $today = Carbon::today('Asia/Karachi')->toDateString();
+
+        if ($bookingDate > $today) {
+            return true;
+        }
+
+        if ($bookingDate < $today) {
+            return false;
+        }
+
+        $startTime = Carbon::createFromFormat('H:i:s', (string) $booking->start_time, 'Asia/Karachi')
+            ->setDateFrom(Carbon::now('Asia/Karachi'));
+
+        return $startTime->greaterThan(Carbon::now('Asia/Karachi'));
+    }
+
+    private function apiError(string $message, string $code, int $status = 422): never
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => $message,
+            'error_code' => $code,
+        ], $status));
     }
 }

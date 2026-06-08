@@ -142,6 +142,14 @@ class ClubController extends Controller
     {
         abort_if($club->role !== 'club', 404);
 
+        if ($club->tournaments()->whereIn('status', ['open', 'full', 'closed'])->exists()) {
+            return back()->withErrors(['club' => 'Club cannot be deleted while it has an active tournament.']);
+        }
+
+        if ($club->bookingsAsClub()->whereIn('booking_status', ['pending', 'confirmed'])->exists()) {
+            return back()->withErrors(['club' => 'Club cannot be deleted while it has an active booking.']);
+        }
+
         if ($club->club_logo) {
             Storage::disk('public')->delete($club->club_logo);
         }
