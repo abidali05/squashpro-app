@@ -16,6 +16,7 @@ class UpdateBookingStatusRequest extends FormRequest
         return [
             'status' => ['required', 'in:confirmed,cancelled'],
             'reason' => ['nullable', 'string', 'max:500'],
+            'rejection_reason' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

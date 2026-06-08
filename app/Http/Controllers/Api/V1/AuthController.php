@@ -395,6 +395,14 @@ class AuthController extends Controller
             ], 404);
         }
 
+        if ($user->role === 'club' && $user->status === 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your club profile is pending admin approval.',
+                'error_code' => 'CLUB_PENDING_APPROVAL',
+            ], 403);
+        }
+
         $this->createOtp($email, 'forgot_password');
 
         return response()->json([
@@ -491,6 +499,14 @@ class AuthController extends Controller
             ], 404);
         }
 
+        if (Hash::check($request->string('new_password')->toString(), $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password cannot be same as current password.',
+                'error_code' => ApiErrorCode::VALIDATION_ERROR,
+            ], 422);
+        }
+
         $user->password = Hash::make($request->string('new_password')->toString());
         $user->save();
 
@@ -553,6 +569,24 @@ class AuthController extends Controller
                 'error_code' => ApiErrorCode::UNAUTHORIZED,
                 'errors' => new \stdClass(),
             ], 401);
+        }
+
+        if ($user->role === 'club') {
+            if ($user->tournaments()->whereIn('status', ['open', 'full', 'closed'])->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Club cannot be deleted while it has an active tournament.',
+                    'error_code' => ApiErrorCode::VALIDATION_ERROR,
+                ], 422);
+            }
+
+            if ($user->bookingsAsClub()->whereIn('booking_status', ['pending', 'confirmed'])->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Club cannot be deleted while it has an active booking.',
+                    'error_code' => ApiErrorCode::VALIDATION_ERROR,
+                ], 422);
+            }
         }
 
         $filesToDelete = array_values(array_filter([

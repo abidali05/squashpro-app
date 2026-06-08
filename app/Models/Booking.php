@@ -17,6 +17,7 @@ class Booking extends Model
         'start_time',
         'end_time',
         'booking_status',
+        'rejection_reason',
         'payment_status',
         'payment_method',
         'payment_transaction_id',

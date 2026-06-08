@@ -50,6 +50,7 @@ class BookingStatusUpdatedNotification extends Notification implements ShouldQue
             'data' => [
                 'booking_id' => $this->booking->id,
                 'booking_status' => $this->booking->booking_status,
+                'rejection_reason' => $this->booking->rejection_reason,
                 'club_id' => $this->booking->club_id,
                 'player_id' => $this->booking->player_id,
             ],

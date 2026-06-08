@@ -15,6 +15,7 @@ class BookingDetailResource extends JsonResource
         return [
             'booking_id' => $this->id,
             'status' => $this->booking_status,
+            'rejection_reason' => $this->rejection_reason,
             'player_detail' => [
                 'player_id' => $this->player?->id,
                 'name' => $this->player?->name,

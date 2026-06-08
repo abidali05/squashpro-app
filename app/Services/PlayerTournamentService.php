@@ -14,11 +14,17 @@ use Illuminate\Support\Facades\DB;
 
 class PlayerTournamentService
 {
-    public function tournaments(?string $filter = null, int $page = 1, int $limit = 10): array
+    public function tournaments(User $player, ?string $filter = null, int $page = 1, int $limit = 10): array
     {
         $today = Carbon::today('Asia/Karachi')->toDateString();
 
-        $query = Tournament::query()->with('club');
+        $query = Tournament::query()
+            ->with('club')
+            ->withExists([
+                'registrations as is_registered' => fn ($query) => $query
+                    ->where('player_id', $player->id)
+                    ->where('registration_status', 'registered'),
+            ]);
 
         match ($filter) {
             'upcoming' => $query
@@ -37,7 +43,8 @@ class PlayerTournamentService
         };
 
         $tournaments = $query
-            ->orderBy('start_date')
+            ->orderBy('registration_deadline')
+            ->orderBy('id')
             ->paginate($limit, ['*'], 'page', $page);
 
         return [
@@ -46,10 +53,15 @@ class PlayerTournamentService
         ];
     }
 
-    public function detail(int $tournamentId): Tournament
+    public function detail(User $player, int $tournamentId): Tournament
     {
         $tournament = Tournament::query()
             ->with('club')
+            ->withExists([
+                'registrations as is_registered' => fn ($query) => $query
+                    ->where('player_id', $player->id)
+                    ->where('registration_status', 'registered'),
+            ])
             ->whereKey($tournamentId)
             ->first();
 

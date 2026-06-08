@@ -19,6 +19,7 @@ class PlayerTournamentListResource extends JsonResource
             'entry_fee' => $this->normalizeNumber($this->entry_fees),
             'registered_players' => ((int) $this->registered_players_count).'/'.((int) $this->allowed_player),
             'tournament_status' => $this->status,
+            'is_registered' => (bool) $this->is_registered,
         ];
     }
 

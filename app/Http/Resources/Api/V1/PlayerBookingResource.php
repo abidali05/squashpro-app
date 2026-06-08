@@ -13,6 +13,7 @@ class PlayerBookingResource extends JsonResource
         return [
             'booking_id' => $this->id,
             'booking_status' => $this->booking_status,
+            'rejection_reason' => $this->rejection_reason,
             'payment_status' => $this->payment_status,
             'payment_method' => $this->payment_method,
             'payment_transaction_id' => $this->payment_transaction_id,

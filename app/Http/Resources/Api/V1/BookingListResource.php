@@ -19,6 +19,7 @@ class BookingListResource extends JsonResource
             'time' => substr((string) $this->start_time, 0, 5).' - '.substr((string) $this->end_time, 0, 5),
             'price' => $courtPrice == (int) $courtPrice ? (int) $courtPrice : $courtPrice,
             'status' => $this->booking_status,
+            'rejection_reason' => $this->rejection_reason,
         ];
     }
 }
