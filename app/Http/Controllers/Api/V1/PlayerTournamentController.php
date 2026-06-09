@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\Player\IndexTournamentsRequest;
 use App\Http\Requests\Api\V1\Player\RegisterTournamentRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentDetailResource;
+use App\Http\Requests\Api\V1\Player\IndexTournamentsRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentListResource;
 use App\Services\PlayerTournamentService;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
