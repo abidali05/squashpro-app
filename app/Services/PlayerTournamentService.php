@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class PlayerTournamentService
 {
-    public function tournaments(User $player, ?string $filter = null, int $page = 1, int $limit = 10): array
+    public function tournaments(User $player, ?string $filter = null, int $page = 1, int $limit = 40): array
     {
         $today = Carbon::today('Asia/Karachi')->toDateString();
 
@@ -27,24 +27,22 @@ class PlayerTournamentService
             ]);
 
         match ($filter) {
+            'open' => $query
+                ->whereDate('registration_deadline', '>=', $today),
             'upcoming' => $query
-                ->whereDate('start_date', '>', $today)
-                ->whereIn('status', ['open', 'full']),
+                ->whereDate('start_date', '>=', $today)
+                ->whereDate('registration_deadline', '<', $today),
             'ongoing' => $query
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
                 ->whereNotIn('status', ['completed', 'cancelled']),
             'completed' => $query
-                ->where(function ($query) use ($today) {
-                    $query->where('status', 'completed')
-                        ->orWhereDate('end_date', '<', $today);
-                }),
+                ->whereDate('end_date', '<', $today),
             default => null,
         };
 
         $tournaments = $query
-            ->orderBy('registration_deadline')
-            ->orderBy('id')
+            ->orderByDesc('created_at')
             ->paginate($limit, ['*'], 'page', $page);
 
         return [
@@ -75,11 +73,11 @@ class PlayerTournamentService
     public function paymentMethods(): array
     {
         return [
-            ['id' => 'card', 'name' => 'Debit/Credit Card'],
-            ['id' => 'wallet', 'name' => 'App Wallet'],
+            // ['id' => 'card', 'name' => 'Debit/Credit Card'],
+            // ['id' => 'wallet', 'name' => 'App Wallet'],
             ['id' => 'cash', 'name' => 'Cash'],
-            ['id' => 'jazzcash', 'name' => 'JazzCash'],
-            ['id' => 'easypaisa', 'name' => 'Easypaisa'],
+            // ['id' => 'jazzcash', 'name' => 'JazzCash'],
+            // ['id' => 'easypaisa', 'name' => 'Easypaisa'],
         ];
     }
 

@@ -13,7 +13,7 @@ class CourtDetailResource extends JsonResource
         $price = (float) $this->price_per_hour;
 
         return [
-            'court_id' => sprintf('court_%02d', $this->id),
+            'court_id' => $this->id,
             'name' => $this->name,
             'type' => Str::headline((string) $this->type),
             'price_per_hour' => $price == (int) $price ? (int) $price : $price,

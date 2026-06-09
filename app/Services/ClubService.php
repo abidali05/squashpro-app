@@ -205,14 +205,54 @@ class ClubService
 
     public function bookings(User $club, ?string $status = null, ?string $date = null, ?int $limit = null, int $page = 1): array
     {
+        $now   = Carbon::now('Asia/Karachi');
+        $today = $now->toDateString();
+
         $allBookings = $club->bookingsAsClub()
             ->with(['player:id,name', 'court:id,name'])
             ->orderByDesc('id')
             ->get();
 
+        // Pending count: only bookings whose date+time has NOT passed yet
+        $pendingCount = $allBookings
+            ->where('booking_status', 'pending')
+            ->filter(function (Booking $booking) use ($today, $now): bool {
+                $bookingDate = $booking->booking_date?->toDateString();
+
+                if ($bookingDate > $today) {
+                    return true;
+                }
+
+                if ($bookingDate < $today) {
+                    return false;
+                }
+
+                // Same day — check start_time hasn't passed
+                $startTime = Carbon::createFromFormat('H:i:s', (string) $booking->start_time, 'Asia/Karachi')
+                    ->setDateFrom($now);
+
+                return $startTime->greaterThan($now);
+            })
+            ->count();
+
         $query = $club->bookingsAsClub()
             ->with(['player:id,name', 'court:id,name'])
-            ->orderByDesc('id');
+            ->orderByDesc('id')
+            ->where(function ($q) use ($today, $now): void {
+                // Non-pending bookings always show regardless of date
+                $q->where('booking_status', '!=', 'pending')
+                    // Pending: only future date
+                    ->orWhere(function ($q) use ($today): void {
+                        $q->where('booking_status', 'pending')
+                            ->whereDate('booking_date', '>', $today);
+                    })
+                    // Pending: same day but start_time hasn't passed yet
+                    ->orWhere(function ($q) use ($today, $now): void {
+                        $q->where('booking_status', 'pending')
+                            ->whereDate('booking_date', $today)
+                            ->whereTime('start_time', '>', $now->format('H:i:s'));
+                    });
+            });
 
         if ($status && in_array($status, ['pending', 'confirmed', 'cancelled'], true)) {
             $query->where('booking_status', $status);
@@ -228,7 +268,7 @@ class ClubService
 
         return [
             'counts' => [
-                'pending_bookings' => $allBookings->where('booking_status', 'pending')->count(),
+                'pending_bookings'   => $pendingCount,
                 'confirmed_bookings' => $allBookings->where('booking_status', 'confirmed')->count(),
                 'cancelled_bookings' => $allBookings->where('booking_status', 'cancelled')->count(),
             ],
