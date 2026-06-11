@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\RejectExpiredBookings;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use App\Services\FirebaseNotificationService;
@@ -7,6 +8,10 @@ use App\Services\FirebaseNotificationService;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('bookings:reject-expired', function () {
+    $this->call(RejectExpiredBookings::class);
+})->purpose('Reject pending bookings whose date and start time have passed');
 
 Artisan::command('firebase:test-credentials', function (FirebaseNotificationService $firebase) {
     $token = $firebase->accessToken();
