@@ -28,6 +28,7 @@ final class ApiErrorCode
     public const SERVER_ERROR = 'SERVER_ERROR';
     public const RECORD_NOT_FOUND = 'RECORD_NOT_FOUND';
     public const DUPLICATE_RESOURCE = 'DUPLICATE_RESOURCE';
+    public const MEMBERSHIP_ALREADY_EXISTS = 'MEMBERSHIP_ALREADY_EXISTS';
     public const CLUB_NOT_FOUND = 'CLUB_NOT_FOUND';
     public const COURT_NOT_FOUND = 'COURT_NOT_FOUND';
     public const COURT_NOT_IN_CLUB = 'COURT_NOT_IN_CLUB';
