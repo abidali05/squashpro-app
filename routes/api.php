@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AccountFcmTokenController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingReviewController;
 use App\Http\Controllers\Api\V1\ClubController;
+use App\Http\Controllers\Api\V1\ClubMembershipController;
 use App\Http\Controllers\Api\V1\PlayerBookingController;
 use App\Http\Controllers\Api\V1\PlayerClubController;
 use App\Http\Controllers\Api\V1\PlayerContentController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
 use App\Http\Controllers\Api\V1\PublicCityController;
+use App\Http\Controllers\Api\V1\PublicClubController;
+use App\Http\Controllers\Api\V1\PublicPlayerController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -19,6 +22,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     Route::get('/cities', [PublicCityController::class, 'index']);
+    Route::get('/clubs', [PublicClubController::class, 'index']);
+    Route::get('/players', [PublicPlayerController::class, 'index']);
     Route::get('/help-support', [PlayerContentController::class, 'helpSupport']);
     Route::get('/privacy-policy', [PlayerContentController::class, 'privacyPolicy']);
 
@@ -84,6 +89,17 @@ Route::prefix('v1')->group(function () {
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
+
+            // Membership verification requests
+            Route::get('membership-requests', [ClubMembershipController::class, 'indexRequests']);
+            Route::patch('membership-requests/{id}/approve', [ClubMembershipController::class, 'approveRequest']);
+            Route::patch('membership-requests/{id}/reject', [ClubMembershipController::class, 'rejectRequest']);
+
+            // Member management
+            Route::get('members', [ClubMembershipController::class, 'indexMembers']);
+            Route::post('members', [ClubMembershipController::class, 'addMember']);
+            Route::get('members/{id}', [ClubMembershipController::class, 'showMember']);
+            Route::delete('members/{id}', [ClubMembershipController::class, 'removeMember']);
         });
 
         // Common Authenticated Routes (Both Player & Club)

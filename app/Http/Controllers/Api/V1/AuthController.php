@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
+use App\Models\ClubMembershipRequest;
 use App\Models\User;
 use App\Support\ApiErrorCode;
 use App\Support\ApiValidationRules;
@@ -21,36 +22,93 @@ class AuthController extends Controller
 {
     public function registerPlayer(Request $request): JsonResponse
     {
+        $email = strtolower($request->string('email')->toString());
+        $phone = $request->string('phone')->toString();
+
+        if (User::where('email', $email)->exists()) {
+            return $this->errorResponse(
+                'Email already exists.',
+                ApiErrorCode::EMAIL_ALREADY_EXISTS,
+                ['email' => ['The email has already been taken.']],
+                409
+            );
+        }
+
+        if (User::where('phone', $phone)->exists()) {
+            return $this->errorResponse(
+                'Phone number already exists.',
+                ApiErrorCode::PHONE_ALREADY_EXISTS,
+                ['phone' => ['The phone has already been taken.']],
+                409
+            );
+        }
+
         $validator = Validator::make($request->all(), [
             'full_name' => ['required', 'string', 'max:255'],
             'email' => [...ApiValidationRules::email(), 'max:255'],
             'phone' => ApiValidationRules::phone(),
             'password' => ['required', Password::min(8)],
+            'club_memberships' => ['nullable', 'array'],
+            'club_memberships.*.club_id' => [
+                'required_with:club_memberships',
+                'integer',
+                'distinct',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'club')->where('status', 'active');
+                }),
+            ],
+            'club_memberships.*.membership_number' => [
+                'required_with:club_memberships.*.club_id',
+                'string',
+                'max:255',
+            ],
         ]);
 
         if ($validator->fails()) {
             return $this->validationError($validator->errors()->toArray());
         }
 
-        $user = User::create([
-            'name' => $request->string('full_name')->toString(),
-            'email' => strtolower($request->string('email')->toString()),
-            'phone' => $request->string('phone')->toString(),
-            'password' => Hash::make($request->string('password')->toString()),
-            'role' => 'player',
-            'status' => 'otp_pending',
-            'otp_verified' => false,
-        ]);
+        DB::beginTransaction();
+        try {
+            $user = User::create([
+                'name' => $request->string('full_name')->toString(),
+                'email' => $email,
+                'phone' => $phone,
+                'password' => Hash::make($request->string('password')->toString()),
+                'role' => 'player',
+                'status' => 'otp_pending',
+                'otp_verified' => false,
+            ]);
 
-        $plainAccessToken = bin2hex(random_bytes(32));
-        $plainRefreshToken = bin2hex(random_bytes(32));
+            $plainAccessToken = bin2hex(random_bytes(32));
+            $plainRefreshToken = bin2hex(random_bytes(32));
 
-        $user->api_access_token = hash('sha256', $plainAccessToken);
-        $user->api_refresh_token = hash('sha256', $plainRefreshToken);
-        $user->save();
+            $user->api_access_token = hash('sha256', $plainAccessToken);
+            $user->api_refresh_token = hash('sha256', $plainRefreshToken);
+            $user->save();
 
-        $this->assignRoleIfPresent($user, 'player');
-        $this->createOtp($user->email, 'registration');
+            $this->assignRoleIfPresent($user, 'player');
+            $this->createOtp($user->email, 'registration');
+
+            // Store club memberships requests transactionally
+            if ($request->has('club_memberships') && is_array($request->input('club_memberships'))) {
+                foreach ($request->input('club_memberships') as $membership) {
+                    if (isset($membership['club_id']) && isset($membership['membership_number'])) {
+                        ClubMembershipRequest::create([
+                            'club_id' => $membership['club_id'],
+                            'player_id' => $user->id,
+                            'membership_number' => $membership['membership_number'],
+                            'status' => ClubMembershipRequest::STATUS_PENDING,
+                        ]);
+                    }
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
 
         return response()->json([
             'success' => true,
@@ -72,6 +130,27 @@ class AuthController extends Controller
 
     public function registerClub(Request $request): JsonResponse
     {
+        $email = strtolower($request->string('email')->toString());
+        $phone = $request->string('phone')->toString();
+
+        if (User::where('email', $email)->exists()) {
+            return $this->errorResponse(
+                'Email already exists.',
+                ApiErrorCode::EMAIL_ALREADY_EXISTS,
+                ['email' => ['The email has already been taken.']],
+                409
+            );
+        }
+
+        if (User::where('phone', $phone)->exists()) {
+            return $this->errorResponse(
+                'Phone number already exists.',
+                ApiErrorCode::PHONE_ALREADY_EXISTS,
+                ['phone' => ['The phone has already been taken.']],
+                409
+            );
+        }
+
         $validator = Validator::make($request->all(), [
             'club_name' => ['required', 'string', 'max:255'],
             'owner_manager_name' => ['required', 'string', 'max:255'],
@@ -85,7 +164,54 @@ class AuthController extends Controller
             'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
             'facilities' => ['nullable', 'array'],
             'facilities.*' => ['string', 'max:255'],
+            
+            // Booking policy fields
+            'non_member_booking' => ['nullable', 'array'],
+            'non_member_booking.allowed' => ['required_with:non_member_booking', 'boolean'],
+            'non_member_booking.start_time' => [
+                'required_if:non_member_booking.allowed,true,1',
+                'nullable',
+                'date_format:H:i',
+            ],
+            'non_member_booking.end_time' => [
+                'required_if:non_member_booking.allowed,true,1',
+                'nullable',
+                'date_format:H:i',
+                'after:non_member_booking.start_time',
+            ],
+            'non_member_booking.timezone' => [
+                'required_if:non_member_booking.allowed,true,1',
+                'nullable',
+                'string',
+                'timezone',
+            ],
+            
+            // Initial player IDs
+            'initial_player_ids' => ['nullable', 'array'],
+            'initial_player_ids.*' => [
+                'integer',
+                'distinct',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'player');
+                }),
+            ],
         ]);
+
+        // Custom validation check: if allowed is false, start_time/end_time/timezone must be null
+        $validator->after(function ($validator) use ($request) {
+            $allowed = $request->input('non_member_booking.allowed');
+            if ($allowed !== null && !filter_var($allowed, FILTER_VALIDATE_BOOLEAN)) {
+                if ($request->filled('non_member_booking.start_time')) {
+                    $validator->errors()->add('non_member_booking.start_time', 'The start time must be null when non-member booking is not allowed.');
+                }
+                if ($request->filled('non_member_booking.end_time')) {
+                    $validator->errors()->add('non_member_booking.end_time', 'The end time must be null when non-member booking is not allowed.');
+                }
+                if ($request->filled('non_member_booking.timezone')) {
+                    $validator->errors()->add('non_member_booking.timezone', 'The timezone must be null when non-member booking is not allowed.');
+                }
+            }
+        });
 
         if ($validator->fails()) {
             return $this->validationError($validator->errors()->toArray());
@@ -96,26 +222,54 @@ class AuthController extends Controller
             $logoPath = $request->file('club_logo')->store('club-logos', 'public');
         }
 
-        $user = User::create([
-            'name' => $request->string('owner_manager_name')->toString(),
-            'email' => strtolower($request->string('email')->toString()),
-            'phone' => $request->string('phone')->toString(),
-            'password' => Hash::make($request->string('password')->toString()),
-            'role' => 'club',
-            'status' => 'otp_pending',
-            'otp_verified' => false,
-            'club_name' => $request->string('club_name')->toString(),
-            'owner_manager_name' => $request->string('owner_manager_name')->toString(),
-            'address' => $request->string('address')->toString(),
-            'city' => $request->string('city')->toString(),
-            'number_of_courts' => $request->integer('number_of_courts'),
-            'working_hours' => $request->string('working_hours')->toString(),
-            'club_logo' => $logoPath,
-            'facilities' => $request->input('facilities', []),
-        ]);
+        $allowed = filter_var($request->input('non_member_booking.allowed', false), FILTER_VALIDATE_BOOLEAN);
 
-        $this->assignRoleIfPresent($user, 'club');
-        $this->createOtp($user->email, 'registration');
+        DB::beginTransaction();
+        try {
+            $user = User::create([
+                'name' => $request->string('owner_manager_name')->toString(),
+                'email' => $email,
+                'phone' => $phone,
+                'password' => Hash::make($request->string('password')->toString()),
+                'role' => 'club',
+                'status' => 'otp_pending',
+                'otp_verified' => false,
+                'club_name' => $request->string('club_name')->toString(),
+                'owner_manager_name' => $request->string('owner_manager_name')->toString(),
+                'address' => $request->string('address')->toString(),
+                'city' => $request->string('city')->toString(),
+                'number_of_courts' => $request->integer('number_of_courts'),
+                'working_hours' => $request->string('working_hours')->toString(),
+                'club_logo' => $logoPath,
+                'facilities' => $request->input('facilities', []),
+                
+                // Save booking policy fields
+                'non_member_booking_allowed' => $allowed,
+                'non_member_booking_start_time' => $allowed ? $request->input('non_member_booking.start_time') : null,
+                'non_member_booking_end_time' => $allowed ? $request->input('non_member_booking.end_time') : null,
+                'timezone' => $allowed ? $request->input('non_member_booking.timezone') : null,
+            ]);
+
+            $this->assignRoleIfPresent($user, 'club');
+            $this->createOtp($user->email, 'registration');
+
+            // Handle initial player verification requests transactionally
+            if ($request->has('initial_player_ids') && is_array($request->input('initial_player_ids'))) {
+                foreach ($request->input('initial_player_ids') as $playerId) {
+                    ClubMembershipRequest::create([
+                        'club_id' => $user->id,
+                        'player_id' => $playerId,
+                        'membership_number' => 'PENDING',
+                        'status' => ClubMembershipRequest::STATUS_PENDING,
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
 
         return response()->json([
             'success' => true,

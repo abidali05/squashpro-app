@@ -44,6 +44,10 @@ class User extends Authenticatable
         'playing_level',
         'primary_hand',
         'bio',
+        'non_member_booking_allowed',
+        'non_member_booking_start_time',
+        'non_member_booking_end_time',
+        'timezone',
     ];
 
     /**
@@ -69,6 +73,7 @@ class User extends Authenticatable
             'otp_verified' => 'boolean',
             'facilities' => 'array',
             'dob' => 'date',
+            'non_member_booking_allowed' => 'boolean',
         ];
     }
 
@@ -128,5 +133,25 @@ class User extends Authenticatable
     public function cityRelation(): BelongsTo
     {
         return $this->belongsTo(City::class, 'city_id');
+    }
+
+    public function clubMembershipRequests(): HasMany
+    {
+        return $this->hasMany(ClubMembershipRequest::class, 'club_id');
+    }
+
+    public function playerMembershipRequests(): HasMany
+    {
+        return $this->hasMany(ClubMembershipRequest::class, 'player_id');
+    }
+
+    public function clubMemberships(): HasMany
+    {
+        return $this->hasMany(ClubMembership::class, 'club_id');
+    }
+
+    public function playerMemberships(): HasMany
+    {
+        return $this->hasMany(ClubMembership::class, 'player_id');
     }
 }
