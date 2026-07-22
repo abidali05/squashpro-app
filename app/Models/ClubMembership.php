@@ -22,6 +22,7 @@ class ClubMembership extends Model
         'status',
         'approved_at',
         'removed_at',
+        'removal_reason',
     ];
 
     protected $casts = [

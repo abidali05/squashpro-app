@@ -53,6 +53,9 @@ Route::prefix('v1')->group(function () {
             Route::post('complete-profile', [AuthController::class, 'completePlayerProfile']);
             Route::get('dashboard', [PlayerDashboardController::class, 'index']);
             Route::get('clubs', [PlayerClubController::class, 'index']);
+            Route::get('get-player-clubs', [PlayerClubController::class, 'getPlayerClubs']);
+            Route::post('add-player-club', [PlayerClubController::class, 'addPlayerClub']);
+            Route::post('remove-player-club', [PlayerClubController::class, 'removePlayerClub']);
             Route::get('clubs/{club_id}', [PlayerClubController::class, 'show']);
             Route::get('clubs/{club_id}/courts', [PlayerClubController::class, 'courts']);
             Route::get('courts/{court_id}/time-slots', [PlayerClubController::class, 'timeSlots']);
