@@ -324,4 +324,93 @@ class AuthApiTest extends TestCase
         $responsePhone->assertStatus(409)
             ->assertJsonPath('error_code', 'PHONE_ALREADY_EXISTS');
     }
+
+    public function test_club_registration_with_members_payload(): void
+    {
+        $player1 = \App\Models\User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+        ]);
+
+        $player2 = \App\Models\User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/register/club', [
+            'club_name' => 'Members Test Club',
+            'owner_manager_name' => 'Manager Name',
+            'email' => 'members-club@example.com',
+            'phone' => '+923001234599',
+            'address' => 'Test Address',
+            'city' => 'Lahore',
+            'number_of_courts' => 5,
+            'working_hours' => '09:00-22:00',
+            'password' => 'Password@123',
+            'members' => [
+                [
+                    'player_id' => $player1->id,
+                    'membership_number' => 'CSC-1045',
+                ],
+                [
+                    'player_id' => $player2->id,
+                    'membership_number' => 'CSC-1188',
+                ],
+            ],
+        ]);
+
+        $response->assertCreated();
+
+        $clubId = $response->json('data.user_id');
+
+        // Verify they are saved directly as approved in club_memberships
+        $this->assertDatabaseHas('club_memberships', [
+            'club_id' => $clubId,
+            'player_id' => $player1->id,
+            'membership_number' => 'CSC-1045',
+            'status' => 'approved',
+            'verification_mode' => 'club_registration',
+        ]);
+
+        $this->assertDatabaseHas('club_memberships', [
+            'club_id' => $clubId,
+            'player_id' => $player2->id,
+            'membership_number' => 'CSC-1188',
+            'status' => 'approved',
+            'verification_mode' => 'club_registration',
+        ]);
+
+        // Audit log exists
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $clubId,
+            'action' => 'add_member',
+            'entity_type' => \App\Models\ClubMembership::class,
+        ]);
+
+        // Validation test: duplicate player in members array
+        $responseDuplicate = $this->postJson('/api/v1/auth/register/club', [
+            'club_name' => 'Members Test Club 2',
+            'owner_manager_name' => 'Manager Name',
+            'email' => 'members-club-2@example.com',
+            'phone' => '+923001234577',
+            'address' => 'Test Address',
+            'city' => 'Lahore',
+            'number_of_courts' => 5,
+            'working_hours' => '09:00-22:00',
+            'password' => 'Password@123',
+            'members' => [
+                [
+                    'player_id' => $player1->id,
+                    'membership_number' => 'CSC-1045',
+                ],
+                [
+                    'player_id' => $player1->id, // Duplicate player_id
+                    'membership_number' => 'CSC-1188',
+                ],
+            ],
+        ]);
+
+        $responseDuplicate->assertStatus(422)
+            ->assertJsonPath('message', 'Validation failed.');
+    }
 }

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
+use App\Models\ClubMembership;
 use App\Models\ClubMembershipRequest;
 use App\Models\User;
 use App\Support\ApiErrorCode;
 use App\Support\ApiValidationRules;
+use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -195,6 +197,21 @@ class AuthController extends Controller
                     $query->where('role', 'player');
                 }),
             ],
+            'members' => ['nullable', 'array'],
+            'members.*.player_id' => [
+                'required_with:members',
+                'integer',
+                'distinct',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                    $query->where('role', 'player');
+                }),
+            ],
+            'members.*.membership_number' => [
+                'required_with:members',
+                'string',
+                'distinct',
+                'max:255',
+            ],
         ]);
 
         // Custom validation check: if allowed is false, start_time/end_time/timezone must be null
@@ -262,6 +279,30 @@ class AuthController extends Controller
                         'membership_number' => 'PENDING',
                         'status' => ClubMembershipRequest::STATUS_PENDING,
                     ]);
+                }
+            }
+
+            // Handle initial player memberships (saved directly as approved) transactionally
+            if ($request->has('members') && is_array($request->input('members'))) {
+                foreach ($request->input('members') as $memberData) {
+                    $membership = ClubMembership::create([
+                        'club_id' => $user->id,
+                        'player_id' => (int) $memberData['player_id'],
+                        'membership_number' => $memberData['membership_number'],
+                        'status' => ClubMembership::STATUS_APPROVED,
+                        'approved_at' => now(),
+                        'verification_mode' => 'club_registration',
+                    ]);
+
+                    // Write audit log
+                    AuditLogger::log(
+                        actorId: $user->id,
+                        action: 'add_member',
+                        entityType: ClubMembership::class,
+                        entityId: $membership->id,
+                        before: null,
+                        after: $membership->toArray()
+                    );
                 }
             }
 
