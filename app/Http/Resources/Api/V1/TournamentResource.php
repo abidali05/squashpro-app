@@ -12,18 +12,34 @@ class TournamentResource extends JsonResource
     {
         $registered = (int) $this->registered_players_count;
         $allowed = (int) $this->allowed_player;
+        $authId = $request->user()?->id;
 
         return [
             'id' => $this->id,
-            'tournament_image' => $this->resolveImageUrl($this->tournament_image),
+            'club_id' => $this->club_id,
+            'opponent_club_id' => $this->opponent_club_id,
             'tournament_name' => $this->name,
+            'tournament_type' => $this->tournament_type,
             'format' => $this->format,
+            'tournament_image' => $this->resolveImageUrl($this->tournament_image),
+            'gender' => $this->gender,
+            'player_level' => $this->player_level,
+            'age_group' => $this->age_group,
             'start_date' => $this->start_date?->toDateString(),
+            'end_date' => $this->end_date?->toDateString(),
             'registration_deadline' => $this->registration_deadline?->toDateString(),
             'entry_fees' => $this->normalizeNumber($this->entry_fees),
             'prize' => $this->normalizeNumber($this->prize_pool),
+            'allowed_player' => $allowed,
+            'maximum_players' => $this->maximum_players,
+            'registered_players_count' => $registered,
             'players_count' => $registered.'/'.$allowed,
             'status' => $this->status,
+            'rules' => $this->rules,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'updated_at' => $this->updated_at?->toIso8601String(),
+            'is_creator' => $this->club_id === $authId,
+            'is_opponent' => $this->opponent_club_id === $authId,
         ];
     }
 

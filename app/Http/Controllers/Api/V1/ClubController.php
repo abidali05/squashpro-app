@@ -357,6 +357,20 @@ class ClubController extends Controller
         ]);
     }
 
+    public function getTournamentTeam(Request $request, string $tournament_id): JsonResponse
+    {
+        $data = $this->clubService->getTournamentTeam(
+            $request->user(),
+            $tournament_id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament team roster retrieved successfully.',
+            'data' => $data,
+        ]);
+    }
+
     private function imageUrl(?string $path): ?string
     {
         if (! $path) {

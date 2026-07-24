@@ -960,6 +960,51 @@ class ClubService
         return 'confirmed';
     }
 
+    public function getTournamentTeam(User $club, string $tournamentId): array
+    {
+        $tournament = Tournament::find($tournamentId);
+        if (!$tournament) {
+            $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
+        }
+
+        // Verify that the authenticated club is either the creator or the opponent
+        if ((int) $tournament->club_id !== $club->id && (int) $tournament->opponent_club_id !== $club->id) {
+            $this->apiError('You are not authorized to view the team roster for this tournament.', 'FORBIDDEN', 403);
+        }
+
+        $registrations = TournamentRegistration::where('tournament_id', $tournament->id)
+            ->with(['player'])
+            ->get();
+
+        return $registrations->map(function ($reg) use ($tournament) {
+            $player = $reg->player;
+            if (!$player) {
+                return null;
+            }
+
+            // Find membership relative to the opponent club if set, otherwise creator club
+            $targetClubId = $tournament->opponent_club_id ?? $tournament->club_id;
+            $membership = ClubMembership::where('club_id', $targetClubId)
+                ->where('player_id', $player->id)
+                ->first();
+
+            return [
+                'player_id' => $player->id,
+                'full_name' => $player->name,
+                'profile_image' => $player->profile_image ? asset('storage/' . $player->profile_image) : null,
+                'membership_number' => $membership?->membership_number,
+                'gender' => $player->gender,
+                'age' => $player->dob ? $player->dob->age : null,
+                'level' => $player->playing_level,
+                'membership_status' => $membership?->status,
+                'registration_status' => $reg->registration_status,
+                'payment_status' => $reg->payment_status,
+                'amount' => $reg->amount,
+                'currency' => $reg->currency,
+            ];
+        })->filter()->values()->toArray();
+    }
+
     private function apiError(string $message, string $code, int $status = 422): never
     {
         throw new HttpResponseException(response()->json([

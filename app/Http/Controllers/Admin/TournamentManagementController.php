@@ -90,6 +90,130 @@ class TournamentManagementController extends Controller
         return view('content.admin.tournaments.show', compact('tournament'));
     }
 
+    public function create(): View
+    {
+        $clubs = User::query()
+            ->where('role', 'club')
+            ->where('status', 'active')
+            ->orderBy('club_name')
+            ->get(['id', 'club_name', 'name', 'city']);
+
+        return view('content.admin.tournaments.create', compact('clubs'));
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'club_id' => ['required', 'integer', 'exists:users,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'format' => ['required', 'string', 'max:100'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'registration_deadline' => ['required', 'date', 'before_or_equal:start_date'],
+            'entry_fees' => ['required', 'numeric', 'min:0'],
+            'prize_pool' => ['required', 'numeric', 'min:0'],
+            'maximum_players' => ['required', 'integer', 'min:1'],
+            'rules' => ['nullable', 'string'],
+            'tournament_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY,OPEN'],
+            'opponent_club_id' => [
+                'required_if:tournament_type,CLUB_TO_CLUB',
+                'nullable',
+                'integer',
+                'different:club_id',
+                'exists:users,id',
+            ],
+            'gender' => ['required', 'string', 'in:MALE,FEMALE,MIXED,OPEN'],
+            'player_level' => ['required', 'array', 'min:1'],
+            'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,ADVANCED,PROFESSIONAL,OPEN'],
+            'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
+        ]);
+
+        $imagePath = null;
+        if ($request->hasFile('tournament_image')) {
+            try {
+                $imagePath = $request->file('tournament_image')->store('tournament-images', 'public');
+            } catch (\Throwable $e) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['tournament_image' => 'File upload failed. This usually indicates that your local PHP temporary upload directory is not configured or not writable. Please set "upload_tmp_dir" in your php.ini file. Details: ' . $e->getMessage()]);
+            }
+        }
+
+        Tournament::create(array_merge($validated, [
+            'tournament_image' => $imagePath,
+            'allowed_player' => $validated['maximum_players'],
+            'status' => 'open',
+        ]));
+
+        return redirect()->route('admin.tournaments.index')->with('success', 'Tournament created successfully.');
+    }
+
+    public function edit(Tournament $tournament): View
+    {
+        $clubs = User::query()
+            ->where('role', 'club')
+            ->where('status', 'active')
+            ->orderBy('club_name')
+            ->get(['id', 'club_name', 'name', 'city']);
+
+        return view('content.admin.tournaments.edit', compact('tournament', 'clubs'));
+    }
+
+    public function update(Request $request, Tournament $tournament): RedirectResponse
+    {
+        $validated = $request->validate([
+            'club_id' => ['required', 'integer', 'exists:users,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'format' => ['required', 'string', 'max:100'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'registration_deadline' => ['required', 'date', 'before_or_equal:start_date'],
+            'entry_fees' => ['required', 'numeric', 'min:0'],
+            'prize_pool' => ['required', 'numeric', 'min:0'],
+            'maximum_players' => ['required', 'integer', 'min:1'],
+            'rules' => ['nullable', 'string'],
+            'tournament_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY,OPEN'],
+            'opponent_club_id' => [
+                'required_if:tournament_type,CLUB_TO_CLUB',
+                'nullable',
+                'integer',
+                'different:club_id',
+                'exists:users,id',
+            ],
+            'gender' => ['required', 'string', 'in:MALE,FEMALE,MIXED,OPEN'],
+            'player_level' => ['required', 'array', 'min:1'],
+            'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,ADVANCED,PROFESSIONAL,OPEN'],
+            'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
+            'status' => ['required', 'string', 'in:pending,soft_accepted,confirmed,rejected,open,full,closed,completed,cancelled'],
+        ]);
+
+        $imagePath = $tournament->tournament_image;
+        if ($request->hasFile('tournament_image')) {
+            try {
+                $imagePath = $request->file('tournament_image')->store('tournament-images', 'public');
+            } catch (\Throwable $e) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['tournament_image' => 'File upload failed. This usually indicates that your local PHP temporary upload directory is not configured or not writable. Please set "upload_tmp_dir" in your php.ini file. Details: ' . $e->getMessage()]);
+            }
+        }
+
+        $tournament->update(array_merge($validated, [
+            'tournament_image' => $imagePath,
+            'allowed_player' => $validated['maximum_players'],
+        ]));
+
+        return redirect()->route('admin.tournaments.index')->with('success', 'Tournament updated successfully.');
+    }
+
+    public function destroy(Tournament $tournament): RedirectResponse
+    {
+        $tournament->delete();
+        return redirect()->route('admin.tournaments.index')->with('success', 'Tournament deleted successfully.');
+    }
+
     public function updateStatus(Request $request, Tournament $tournament): RedirectResponse
     {
         $validated = $request->validate([

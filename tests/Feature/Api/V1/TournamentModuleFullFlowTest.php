@@ -471,4 +471,80 @@ class TournamentModuleFullFlowTest extends TestCase
         $this->assertContains($tournament1->id, $ids);
         $this->assertContains($tournament2->id, $ids);
     }
+
+    public function test_get_tournament_team_endpoint_authorization_and_data(): void
+    {
+        // 1. Create a tournament organized by club1, inviting club2
+        $tournament = Tournament::create([
+            'club_id' => $this->club1->id,
+            'opponent_club_id' => $this->club2->id,
+            'name' => 'C2C Championship',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-45',
+            'maximum_players' => 10,
+            'status' => 'soft_accepted',
+        ]);
+
+        // Submit team roster as club2 (opponent)
+        $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['player_ids' => [$this->player1->id]],
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+
+        // A. Organizing club (club1) can retrieve the team roster
+        $response1 = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['Authorization' => "Bearer {$this->token1}"]
+        );
+        $response1->assertOk();
+        $response1->assertJsonStructure([
+            'success',
+            'message',
+            'data' => [
+                '*' => [
+                    'player_id',
+                    'full_name',
+                    'profile_image',
+                    'membership_number',
+                    'gender',
+                    'age',
+                    'level',
+                    'membership_status',
+                    'registration_status',
+                    'payment_status',
+                    'amount',
+                    'currency',
+                ]
+            ]
+        ]);
+        $this->assertCount(1, $response1->json('data'));
+        $this->assertEquals($this->player1->id, $response1->json('data.0.player_id'));
+
+        // B. Opponent club (club2) can retrieve the team roster
+        $response2 = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['Authorization' => "Bearer {$this->token2}"]
+        );
+        $response2->assertOk();
+        $this->assertCount(1, $response2->json('data'));
+
+        // C. Unrelated club (club3) cannot retrieve the team roster (403)
+        $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['Authorization' => "Bearer {$this->token3}"]
+        )->assertStatus(403);
+
+        // D. Non-existent tournament returns 404
+        $this->getJson(
+            "/api/v1/club/tournaments/999999/team",
+            ['Authorization' => "Bearer {$this->token1}"]
+        )->assertStatus(404);
+    }
 }
