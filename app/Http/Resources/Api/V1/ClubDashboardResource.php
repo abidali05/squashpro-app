@@ -18,6 +18,8 @@ class ClubDashboardResource extends JsonResource
             'available_courts' => $this->resource['available_courts'] ?? 0,
             'maintenance_courts' => $this->resource['maintenance_courts'] ?? 0,
             'active_tournaments' => $this->resource['active_tournaments'] ?? 0,
+            'pending_membership_requests' => $this->resource['pending_membership_requests'] ?? 0,
+            'pending_tournament_invitations' => $this->resource['pending_tournament_invitations'] ?? 0,
         ];
     }
 }

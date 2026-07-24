@@ -82,7 +82,10 @@ class TournamentManagementController extends Controller
 
     public function show(Tournament $tournament): View
     {
-        $tournament->load(['club:id,club_name,name,email,phone,address,city,club_logo,working_hours']);
+        $tournament->load([
+            'club:id,club_name,name,email,phone,address,city,club_logo,working_hours',
+            'registrations.player:id,name,email,gender,playing_level'
+        ]);
 
         return view('content.admin.tournaments.show', compact('tournament'));
     }
@@ -90,7 +93,7 @@ class TournamentManagementController extends Controller
     public function updateStatus(Request $request, Tournament $tournament): RedirectResponse
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:open,full,closed,completed,cancelled'],
+            'status' => ['required', 'in:pending,soft_accepted,confirmed,rejected,open,full,closed,completed,cancelled'],
         ]);
 
         $tournament->update(['status' => $validated['status']]);

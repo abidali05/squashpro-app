@@ -24,6 +24,7 @@ use App\Support\AuditLogger;
 use App\Services\PlayerBookingService;
 use App\Services\PlayerMembershipService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PlayerClubController extends Controller
@@ -194,6 +195,7 @@ class PlayerClubController extends Controller
     public function index(IndexClubsRequest $request): JsonResponse
     {
         $result = $this->playerBookingService->clubs(
+            $request->user(),
             $request->boolean('lowest_price'),
             $request->boolean('open_now'),
             $request->integer('page', 1),
@@ -208,9 +210,9 @@ class PlayerClubController extends Controller
         ]);
     }
 
-    public function show(string $club_id): JsonResponse
+    public function show(Request $request, string $club_id): JsonResponse
     {
-        $club = $this->playerBookingService->clubDetails((int) $club_id);
+        $club = $this->playerBookingService->clubDetails($request->user(), (int) $club_id);
 
         return response()->json([
             'success' => true,

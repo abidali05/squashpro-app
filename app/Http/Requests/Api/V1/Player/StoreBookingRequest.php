@@ -15,13 +15,21 @@ class StoreBookingRequest extends BaseApiRequest
 
     public function rules(): array
     {
+        $player = $this->user();
+        $clubId = $this->input('club_id');
+
+        $isMember = \App\Models\ClubMembership::where('player_id', $player?->id)
+            ->where('club_id', $clubId)
+            ->where('status', 'approved')
+            ->exists();
+
         return [
             'club_id' => ['required', 'integer', 'min:1'],
             'court_id' => ['required', 'integer', 'min:1'],
             'slot_id' => ['required', 'integer', 'min:1'],
             'booking_date' => ['required', 'date_format:Y-m-d'],
-            'payment_method' => ['required', 'in:card,wallet,cash,jazzcash,easypaisa'],
-            'payment_transaction_id' => ['required', 'string', 'max:255'],
+            'payment_method' => [$isMember ? 'nullable' : 'required', 'in:card,wallet,cash,jazzcash,easypaisa'],
+            'payment_transaction_id' => [$isMember ? 'nullable' : 'required', 'string', 'max:255'],
         ];
     }
 

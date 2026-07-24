@@ -75,4 +75,21 @@ class PlayerTournamentController extends Controller
             ],
         ], 201);
     }
+
+    public function respondToParticipation(\App\Http\Requests\Api\V1\Player\PlayerParticipationRequest $request, string $tournament_id): JsonResponse
+    {
+        $status = $this->playerTournamentService->respondToParticipation(
+            $request->user(),
+            (int) $tournament_id,
+            $request->input('decision')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Participation response recorded successfully.',
+            'data' => [
+                'status' => $status,
+            ],
+        ]);
+    }
 }

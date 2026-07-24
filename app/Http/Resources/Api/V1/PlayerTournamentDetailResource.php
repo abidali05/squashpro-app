@@ -22,12 +22,20 @@ class PlayerTournamentDetailResource extends JsonResource
             'address'               => $this->club?->address,
             'start_date'            => $this->start_date?->toDateString(),
             'end_date'              => $this->end_date?->toDateString(),
-            'registration_deadline' => $this->registration_deadline?->toDateString(),
+            'registration_deadline' => $this->registration_deadline?->toIso8601String(),
             'entry_fee'             => $this->normalizeNumber($this->entry_fees),
             'prize_pool'            => $this->normalizeNumber($this->prize_pool),
             'registered_players'    => ((int) $this->registered_players_count) . '/' . ((int) $this->allowed_player),
             'rules'                 => $this->rules,
             'is_registered'         => (bool) $this->is_registered,
+            
+            // New fields
+            'tournament_type'       => $this->tournament_type,
+            'opponent_club_id'      => $this->opponent_club_id,
+            'gender'                => $this->gender,
+            'player_level'          => $this->player_level,
+            'age_group'             => $this->age_group,
+            'maximum_players'       => $this->maximum_players,
         ];
     }
 
