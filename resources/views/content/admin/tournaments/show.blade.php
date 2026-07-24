@@ -83,6 +83,76 @@
                 </div>
             </div>
 
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Registrations & Teams</h6>
+                    <span class="badge bg-primary">{{ $tournament->registrations->count() }} Registered</span>
+                </div>
+                <div class="card-body">
+                    @if($tournament->registrations->isEmpty())
+                        <div class="text-center py-3 text-muted">
+                            <i class="mdi mdi-account-multiple-outline d-block mb-1" style="font-size: 24px;"></i>
+                            No player registrations or teams submitted yet.
+                        </div>
+                    @else
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Player</th>
+                                        <th>Gender</th>
+                                        <th>Level</th>
+                                        <th>Registration Status</th>
+                                        <th>Payment</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($tournament->registrations as $reg)
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div>
+                                                        <span class="fw-semibold d-block">{{ $reg->player?->name ?? '—' }}</span>
+                                                        <small class="text-muted">{{ $reg->player?->email ?? '—' }}</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td><span class="text-capitalize">{{ $reg->player?->gender ?? '—' }}</span></td>
+                                            <td><span class="text-capitalize">{{ $reg->player?->playing_level ?? '—' }}</span></td>
+                                            <td>
+                                                @php
+                                                    $regStatusMap = [
+                                                        'registered' => 'bg-label-success',
+                                                        'pending' => 'bg-label-warning',
+                                                        'cancelled' => 'bg-label-danger',
+                                                    ];
+                                                    $regBadge = $regStatusMap[$reg->registration_status] ?? 'bg-label-secondary';
+                                                @endphp
+                                                <span class="badge {{ $regBadge }}">{{ ucfirst($reg->registration_status) }}</span>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $payStatusMap = [
+                                                        'paid' => 'bg-success',
+                                                        'pending' => 'bg-warning',
+                                                        'failed' => 'bg-danger',
+                                                    ];
+                                                    $payDot = $payStatusMap[$reg->payment_status] ?? 'bg-secondary';
+                                                @endphp
+                                                <span class="d-inline-block rounded-circle {{ $payDot }}" style="width: 8px; height: 8px; margin-right: 4px;"></span>
+                                                <span class="text-capitalize">{{ $reg->payment_status }}</span>
+                                            </td>
+                                            <td>{{ $reg->currency }} {{ number_format($reg->amount, 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header"><h6 class="mb-0">Status</h6></div>
                 <div class="card-body">
@@ -91,7 +161,7 @@
                         <div class="col-md-8">
                             <label class="form-label">Update Tournament Status</label>
                             <select name="status" class="form-select">
-                                @foreach(['open' => 'Open', 'full' => 'Full', 'closed' => 'Closed', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $val => $label)
+                                @foreach(['pending' => 'Pending Invitation', 'soft_accepted' => 'Soft Accepted', 'confirmed' => 'Confirmed Team', 'rejected' => 'Rejected Invitation', 'open' => 'Open', 'full' => 'Full', 'closed' => 'Closed', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $val => $label)
                                     <option value="{{ $val }}" @selected($tournament->status === $val)>{{ $label }}</option>
                                 @endforeach
                             </select>

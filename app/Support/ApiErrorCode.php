@@ -38,4 +38,6 @@ final class ApiErrorCode
     public const SLOT_ALREADY_BOOKED = 'SLOT_ALREADY_BOOKED';
     public const CLUB_CLOSED = 'CLUB_CLOSED';
     public const PAYMENT_FAILED = 'PAYMENT_FAILED';
+    public const NON_MEMBER_BOOKING_DISABLED = 'NON_MEMBER_BOOKING_DISABLED';
+    public const OUTSIDE_NON_MEMBER_WINDOW = 'OUTSIDE_NON_MEMBER_WINDOW';
 }

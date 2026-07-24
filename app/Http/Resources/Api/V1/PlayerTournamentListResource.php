@@ -23,6 +23,14 @@ class PlayerTournamentListResource extends JsonResource
             'registered_players' => ((int) $this->registered_players_count) . '/' . ((int) $this->allowed_player),
             'tournament_status'  => $this->resolveDisplayStatus(),
             'is_registered'      => (bool) $this->is_registered,
+            
+            // New fields
+            'tournament_type'    => $this->tournament_type,
+            'opponent_club_id'   => $this->opponent_club_id,
+            'gender'             => $this->gender,
+            'player_level'       => $this->player_level,
+            'age_group'          => $this->age_group,
+            'maximum_players'    => $this->maximum_players,
         ];
     }
 }

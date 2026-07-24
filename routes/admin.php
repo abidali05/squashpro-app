@@ -11,6 +11,12 @@ use App\Http\Controllers\Admin\SupportOptionController;
 use App\Http\Controllers\Admin\TournamentManagementController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PlayerController;
+use App\Http\Controllers\Admin\MembershipManagementController;
+use App\Http\Controllers\Admin\TournamentRegistrationController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\BookingReviewManagementController;
+use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\NotificationManagementController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserRoleController;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +57,13 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('bookings', [BookingManagementController::class, 'index'])->name('bookings.index');
         Route::get('bookings/{booking}', [BookingManagementController::class, 'show'])->name('bookings.show');
         Route::post('bookings/{booking}/status', [BookingManagementController::class, 'updateStatus'])->name('bookings.status');
+        Route::get('booking-reviews', [BookingReviewManagementController::class, 'index'])->name('booking-reviews.index');
+        Route::delete('booking-reviews/{review}', [BookingReviewManagementController::class, 'destroy'])->name('booking-reviews.destroy');
+
+        // Club Memberships
+        Route::get('memberships', [MembershipManagementController::class, 'index'])->name('memberships.index');
+        Route::delete('memberships/{membership}', [MembershipManagementController::class, 'destroy'])->name('memberships.destroy');
+        Route::get('membership-requests', [MembershipManagementController::class, 'requestsIndex'])->name('membership-requests.index');
         Route::get('courts', [CourtManagementController::class, 'index'])->name('courts.index');
         Route::get('courts/create', [CourtManagementController::class, 'create'])->name('courts.create');
         Route::post('courts', [CourtManagementController::class, 'store'])->name('courts.store');
@@ -61,10 +74,15 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('tournaments', [TournamentManagementController::class, 'index'])->name('tournaments.index');
         Route::get('tournaments/{tournament}', [TournamentManagementController::class, 'show'])->name('tournaments.show');
         Route::post('tournaments/{tournament}/status', [TournamentManagementController::class, 'updateStatus'])->name('tournaments.status');
+
+        // Tournament Registrations
+        Route::get('tournament-registrations', [TournamentRegistrationController::class, 'index'])->name('tournament-registrations.index');
+        Route::delete('tournament-registrations/{registration}', [TournamentRegistrationController::class, 'destroy'])->name('tournament-registrations.destroy');
         Route::get('payments', [ModulePlaceholderController::class, 'index'])->defaults('module', 'payments')->name('payments.index');
         Route::get('revenue-reports', [ModulePlaceholderController::class, 'index'])->defaults('module', 'revenue reports')->name('revenue.index');
-        Route::get('notifications', [ModulePlaceholderController::class, 'index'])->defaults('module', 'notifications')->name('notifications.index');
-        Route::get('reports', [ModulePlaceholderController::class, 'index'])->defaults('module', 'reports')->name('reports.index');
+        Route::get('notifications', [NotificationManagementController::class, 'index'])->name('notifications.index');
+        Route::delete('notifications/{notification}', [NotificationManagementController::class, 'destroy'])->name('notifications.destroy');
+        Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('settings', [ModulePlaceholderController::class, 'index'])->defaults('module', 'settings')->name('settings.index');
 
         Route::resource('support-options', SupportOptionController::class)->except(['show']);
@@ -88,4 +106,7 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('users', [UserRoleController::class, 'index'])->name('users.index');
         Route::get('users/{user}/roles', [UserRoleController::class, 'edit'])->name('users.roles.edit');
         Route::put('users/{user}/roles', [UserRoleController::class, 'update'])->name('users.roles.update');
+
+        // Audit Logs
+        Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     });

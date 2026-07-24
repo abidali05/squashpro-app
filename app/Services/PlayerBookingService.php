@@ -20,13 +20,16 @@ use Illuminate\Support\Str;
 
 class PlayerBookingService
 {
-    public function clubs(bool $lowestPrice = false, bool $openNow = false, int $page = 1, int $limit = 10): array
+    public function clubs(User $player, bool $lowestPrice = false, bool $openNow = false, int $page = 1, int $limit = 10): array
     {
+        $memberships = \App\Models\ClubMembership::where('player_id', $player->id)->get()->groupBy('club_id');
+        $requests = \App\Models\ClubMembershipRequest::where('player_id', $player->id)->get()->groupBy('club_id');
+
         $clubs = User::query()
             ->where('role', 'club')
             ->where('status', 'active')
             ->get()
-            ->map(fn (User $club) => $this->clubSummary($club));
+            ->map(fn (User $club) => $this->clubSummary($club, $player, $memberships, $requests));
 
         if ($openNow) {
             $clubs = $clubs->filter(fn (array $club) => $club['is_open_now'])->values();
@@ -56,11 +59,13 @@ class PlayerBookingService
         ];
     }
 
-    public function clubDetails(int $clubId): array
+    public function clubDetails(User $player, int $clubId): array
     {
         $club = $this->findClub($clubId);
+        $memberships = \App\Models\ClubMembership::where('player_id', $player->id)->get()->groupBy('club_id');
+        $requests = \App\Models\ClubMembershipRequest::where('player_id', $player->id)->get()->groupBy('club_id');
 
-        return $this->clubDetail($club);
+        return $this->clubDetail($club, $player, $memberships, $requests);
     }
 
     public function clubCourts(int $clubId, string $date): array
@@ -160,6 +165,44 @@ class PlayerBookingService
                 $this->apiError('Club is closed at selected time.', ApiErrorCode::CLUB_CLOSED);
             }
 
+            // Check if player has active approved membership
+            $membership = \App\Models\ClubMembership::where('player_id', $player->id)
+                ->where('club_id', $club->id)
+                ->where('status', 'approved')
+                ->first();
+
+            $isApprovedMember = (bool) $membership;
+
+            if (!$isApprovedMember) {
+                // Check if non-member booking is allowed
+                if (!$club->non_member_booking_allowed) {
+                    $this->apiError('Non-member booking is disabled for this club. Only approved club members are allowed to book.', ApiErrorCode::NON_MEMBER_BOOKING_DISABLED, 403);
+                }
+
+                // Check non-member allowed daily window
+                if ($club->non_member_booking_start_time && $club->non_member_booking_end_time) {
+                    $slotStart = substr($slot->start_time, 0, 5);
+                    $slotEnd = substr($slot->end_time, 0, 5);
+                    $allowedStart = substr($club->non_member_booking_start_time, 0, 5);
+                    $allowedEnd = substr($club->non_member_booking_end_time, 0, 5);
+
+                    $startMatch = false;
+                    $endMatch = false;
+
+                    if ($allowedStart <= $allowedEnd) {
+                        $startMatch = ($slotStart >= $allowedStart && $slotStart <= $allowedEnd);
+                        $endMatch = ($slotEnd >= $allowedStart && $slotEnd <= $allowedEnd);
+                    } else {
+                        $startMatch = ($slotStart >= $allowedStart || $slotStart <= $allowedEnd);
+                        $endMatch = ($slotEnd >= $allowedStart || $slotEnd <= $allowedEnd);
+                    }
+
+                    if (!$startMatch || !$endMatch) {
+                        $this->apiError("Non-members are only allowed to book within the time window: {$allowedStart} - {$allowedEnd}.", ApiErrorCode::OUTSIDE_NON_MEMBER_WINDOW, 422);
+                    }
+                }
+            }
+
             $booking = Booking::create([
                 'club_id' => $club->id,
                 'court_id' => $court->id,
@@ -168,10 +211,10 @@ class PlayerBookingService
                 'booking_date' => $data['booking_date'],
                 'start_time' => $slot->start_time,
                 'end_time' => $slot->end_time,
-                'booking_status' => 'pending',
+                'booking_status' => $isApprovedMember ? 'confirmed' : 'pending',
                 'payment_status' => 'paid',
-                'payment_method' => $data['payment_method'],
-                'payment_transaction_id' => $data['payment_transaction_id'],
+                'payment_method' => $isApprovedMember ? 'free_membership_allowance' : ($data['payment_method'] ?? 'cash'),
+                'payment_transaction_id' => $isApprovedMember ? 'FREE_MEMBER_BOOKING' : ($data['payment_transaction_id'] ?? null),
                 'court_price' => $slot->price,
                 'service_fee' => 0,
                 'total_amount' => $slot->price,
@@ -280,10 +323,62 @@ class PlayerBookingService
         });
     }
 
-    private function clubSummary(User $club): array
+    private function resolveMembership(User $player, int $clubId, $memberships, $requests): array
+    {
+        $approved = isset($memberships[$clubId]) ? $memberships[$clubId]->where('status', 'approved')->first() : null;
+        if ($approved) {
+            return [
+                'is_member' => true,
+                'membership_status' => 'approved',
+                'membership_number' => $approved->membership_number,
+            ];
+        }
+
+        $pending = isset($requests[$clubId]) ? $requests[$clubId]->where('status', 'pending')->first() : null;
+        if ($pending) {
+            return [
+                'is_member' => false,
+                'membership_status' => 'pending',
+                'membership_number' => $pending->membership_number,
+            ];
+        }
+
+        $rejected = isset($requests[$clubId]) ? $requests[$clubId]->where('status', 'rejected')->first() : null;
+        if ($rejected) {
+            return [
+                'is_member' => false,
+                'membership_status' => 'rejected',
+                'membership_number' => $rejected->membership_number,
+            ];
+        }
+
+        $removed = isset($memberships[$clubId]) ? $memberships[$clubId]->where('status', 'removed')->first() : null;
+        if ($removed) {
+            return [
+                'is_member' => false,
+                'membership_status' => 'removed',
+                'membership_number' => $removed->membership_number,
+            ];
+        }
+
+        return [
+            'is_member' => false,
+            'membership_status' => null,
+            'membership_number' => null,
+        ];
+    }
+
+    private function clubSummary(User $club, User $player, $memberships, $requests): array
     {
         $workingHours = $this->parseWorkingHours($club->working_hours);
         $lowestPrice = $this->lowestCourtPrice($club);
+
+        $membershipInfo = $this->resolveMembership($player, $club->id, $memberships, $requests);
+
+        $allowNonMemberBooking = (bool) $club->non_member_booking_allowed;
+        $isMember = $membershipInfo['is_member'];
+        $canBook = $isMember || $allowNonMemberBooking;
+        $requiresPayment = !$isMember;
 
         return [
             'id' => $club->id,
@@ -296,12 +391,36 @@ class PlayerBookingService
             'is_open_now' => $this->isOpenNow($club, $workingHours),
             'lowest_court_price' => $lowestPrice,
             'total_courts' => $club->courts()->count(),
+
+            // Required MaxSquash v1.4 fields
+            'allow_non_member_booking' => $allowNonMemberBooking,
+            'non_member_booking_start_time' => $allowNonMemberBooking ? ($club->non_member_booking_start_time ? substr($club->non_member_booking_start_time, 0, 5) : null) : null,
+            'non_member_booking_end_time' => $allowNonMemberBooking ? ($club->non_member_booking_end_time ? substr($club->non_member_booking_end_time, 0, 5) : null) : null,
+            'is_member' => $isMember,
+            'membership_status' => $membershipInfo['membership_status'],
+            'membership_number' => $membershipInfo['membership_number'],
+            'can_book' => $canBook,
+            'requires_payment' => $requiresPayment,
         ];
     }
 
-    private function clubDetail(User $club): array
+    private function clubDetail(User $club, User $player, $memberships = null, $requests = null): array
     {
         $workingHours = $this->parseWorkingHours($club->working_hours);
+
+        if ($memberships === null) {
+            $memberships = \App\Models\ClubMembership::where('player_id', $player->id)->get()->groupBy('club_id');
+        }
+        if ($requests === null) {
+            $requests = \App\Models\ClubMembershipRequest::where('player_id', $player->id)->get()->groupBy('club_id');
+        }
+
+        $membershipInfo = $this->resolveMembership($player, $club->id, $memberships, $requests);
+
+        $allowNonMemberBooking = (bool) $club->non_member_booking_allowed;
+        $isMember = $membershipInfo['is_member'];
+        $canBook = $isMember || $allowNonMemberBooking;
+        $requiresPayment = !$isMember;
 
         return [
             'club_id' => $club->id,
@@ -317,6 +436,16 @@ class PlayerBookingService
             'facilities' => $club->facilities ?? [],
             'courts_count' => $club->courts()->count(),
             'lowest_court_price' => $this->lowestCourtPrice($club),
+
+            // Required MaxSquash v1.4 fields
+            'allow_non_member_booking' => $allowNonMemberBooking,
+            'non_member_booking_start_time' => $allowNonMemberBooking ? ($club->non_member_booking_start_time ? substr($club->non_member_booking_start_time, 0, 5) : null) : null,
+            'non_member_booking_end_time' => $allowNonMemberBooking ? ($club->non_member_booking_end_time ? substr($club->non_member_booking_end_time, 0, 5) : null) : null,
+            'is_member' => $isMember,
+            'membership_status' => $membershipInfo['membership_status'],
+            'membership_number' => $membershipInfo['membership_number'],
+            'can_book' => $canBook,
+            'requires_payment' => $requiresPayment,
         ];
     }
 
