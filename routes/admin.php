@@ -72,7 +72,12 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::put('courts/{court}', [CourtManagementController::class, 'update'])->name('courts.update');
         Route::delete('courts/{court}', [CourtManagementController::class, 'destroy'])->name('courts.destroy');
         Route::get('tournaments', [TournamentManagementController::class, 'index'])->name('tournaments.index');
+        Route::get('tournaments/create', [TournamentManagementController::class, 'create'])->name('tournaments.create');
+        Route::post('tournaments', [TournamentManagementController::class, 'store'])->name('tournaments.store');
         Route::get('tournaments/{tournament}', [TournamentManagementController::class, 'show'])->name('tournaments.show');
+        Route::get('tournaments/{tournament}/edit', [TournamentManagementController::class, 'edit'])->name('tournaments.edit');
+        Route::put('tournaments/{tournament}', [TournamentManagementController::class, 'update'])->name('tournaments.update');
+        Route::delete('tournaments/{tournament}', [TournamentManagementController::class, 'destroy'])->name('tournaments.destroy');
         Route::post('tournaments/{tournament}/status', [TournamentManagementController::class, 'updateStatus'])->name('tournaments.status');
 
         // Tournament Registrations

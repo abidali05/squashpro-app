@@ -21,3 +21,48 @@
 <!-- END: Page JS-->
 
 @stack('my-script')
+
+<!-- Toastr JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+<script>
+    $(document).ready(function() {
+        toastr.options = {
+            "closeButton": true,
+            "debug": false,
+            "newestOnTop": true,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "preventDuplicates": false,
+            "showDuration": "300",
+            "hideDuration": "1000",
+            "timeOut": "5000",
+            "extendedTimeOut": "1000",
+            "showEasing": "swing",
+            "hideEasing": "linear",
+            "showMethod": "fadeIn",
+            "hideMethod": "fadeOut"
+        };
+
+        @if(Session::has('success'))
+            toastr.success({!! json_encode(Session::get('success')) !!});
+        @endif
+
+        @if(Session::has('error'))
+            toastr.error({!! json_encode(Session::get('error')) !!});
+        @endif
+
+        @if(Session::has('info'))
+            toastr.info({!! json_encode(Session::get('info')) !!});
+        @endif
+
+        @if(Session::has('warning'))
+            toastr.warning({!! json_encode(Session::get('warning')) !!});
+        @endif
+
+        @if(isset($errors) && $errors->any())
+            @foreach($errors->all() as $error)
+                toastr.error({!! json_encode($error) !!});
+            @endforeach
+        @endif
+    });
+</script>

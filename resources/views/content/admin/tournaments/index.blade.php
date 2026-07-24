@@ -9,6 +9,11 @@
             <h4 class="admin-page-header__title">Tournaments</h4>
             <p class="admin-page-header__subtitle">Monitor tournament schedules, capacity, registration, and status.</p>
         </div>
+        <div class="admin-page-header__actions">
+            <a href="{{ route('admin.tournaments.create') }}" class="btn btn-dark">
+                <i class="mdi mdi-plus me-1"></i> Add Tournament
+            </a>
+        </div>
     </div>
 
     <div class="tournament-stats-grid">
@@ -167,6 +172,16 @@
                         'type' => 'view',
                         'href' => route('admin.tournaments.show', $tournament),
                         'title' => 'View Tournament',
+                    ])
+                    @include('admin.components.action-buttons', [
+                        'type' => 'edit',
+                        'href' => route('admin.tournaments.edit', $tournament),
+                        'title' => 'Edit Tournament',
+                    ])
+                    @include('admin.components.action-buttons', [
+                        'type' => 'delete',
+                        'formAction' => route('admin.tournaments.destroy', $tournament),
+                        'confirm' => "Delete tournament \"{$tournament->name}\"?",
                     ])
                 </td>
             </tr>
