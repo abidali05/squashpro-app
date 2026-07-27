@@ -72,8 +72,9 @@ Route::prefix('v1')->group(function () {
             Route::get('payment-methods', [PlayerTournamentController::class, 'paymentMethods']);
             Route::post('tournament/register', [PlayerTournamentController::class, 'register']);
             Route::patch('tournaments/{tournament_id}/participation', [PlayerTournamentController::class, 'respondToParticipation']);
+            Route::post('tournament/{tournament_id}/payment', [PlayerTournamentController::class, 'completePayment']);
         });
- 
+
         // Club Routes
         Route::prefix('club')->middleware('api.role:club')->group(function () {
             Route::get('dashboard', [ClubController::class, 'dashboard']);
@@ -94,6 +95,7 @@ Route::prefix('v1')->group(function () {
             Route::get('tournaments/{tournament_id}/eligible-players', [ClubController::class, 'eligiblePlayers']);
             Route::post('tournaments/{tournament_id}/team', [ClubController::class, 'submitTeam']);
             Route::get('tournaments/{tournament_id}/team', [ClubController::class, 'getTournamentTeam']);
+            Route::patch('tournaments/{tournament_id}/registrations/{registration_id}/accept', [ClubController::class, 'acceptRegistration']);
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);

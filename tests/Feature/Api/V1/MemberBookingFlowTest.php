@@ -313,4 +313,62 @@ class MemberBookingFlowTest extends TestCase
         $responseSuccess->assertJsonPath('data.booking_status', 'pending');
         $responseSuccess->assertJsonPath('data.payment_method', 'card');
     }
+
+    public function test_club_booking_detail_includes_complete_player_detail(): void
+    {
+        $clubToken = 'test-club-token-123';
+        $this->club1->api_access_token = hash('sha256', $clubToken);
+        $this->club1->save();
+
+        $court = Court::create([
+            'club_id' => $this->club1->id,
+            'name' => 'Court A',
+            'status' => 'active',
+            'price_per_hour' => 1200,
+        ]);
+
+        $slot = CourtTimeSlot::create([
+            'club_id' => $this->club1->id,
+            'court_id' => $court->id,
+            'booking_date' => '2026-08-20',
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+            'status' => 'available',
+            'price' => 1200,
+        ]);
+
+        // Create booking
+        $booking = \App\Models\Booking::create([
+            'club_id' => $this->club1->id,
+            'court_id' => $court->id,
+            'player_id' => $this->player1->id,
+            'slot_id' => $slot->id,
+            'booking_date' => '2026-08-20',
+            'start_time' => '10:00:00',
+            'end_time' => '11:00:00',
+            'booking_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'payment_method' => 'free_membership_allowance',
+            'payment_transaction_id' => 'FREE_MEMBER_BOOKING',
+            'court_price' => 1200,
+            'service_fee' => 0,
+            'total_amount' => 1200,
+            'currency' => 'PKR',
+        ]);
+
+        $response = $this->getJson(
+            "/api/v1/club/bookings/{$booking->id}",
+            ['Authorization' => "Bearer {$clubToken}"]
+        );
+
+        $response->assertOk();
+        $response->assertJsonPath('data.player_detail.player_id', $this->player1->id);
+        $response->assertJsonPath('data.player_detail.is_member', true);
+        $response->assertJsonPath('data.player_detail.membership_status', 'approved');
+        $response->assertJsonPath('data.player_detail.membership_number', 'MEM-ALPHA-001');
+        $response->assertJsonPath('data.player_detail.can_pay', false); // Member doesn't pay
+        $response->assertJsonPath('data.player_detail.gender', 'male');
+        $response->assertJsonPath('data.player_detail.playing_level', 'intermediate');
+        $response->assertJsonPath('data.player_detail.age', 26); // Born 2000-01-01, current time is 2026
+    }
 }

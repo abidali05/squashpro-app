@@ -80,7 +80,7 @@
             </ul>
         </li>
 
-        {{-- <li class="menu-item {{ request()->routeIs('admin.payments.*') || request()->routeIs('admin.revenue.*') ? 'open' : '' }}">
+        <li class="menu-item {{ request()->routeIs('admin.payments.*') || request()->routeIs('admin.revenue.*') ? 'open' : '' }}">
             <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-cash-multiple"></i>
                 <div>Finance</div>
@@ -93,7 +93,7 @@
                     <a href="{{ route('admin.revenue.index') }}" class="menu-link"><div>Revenue Reports</div></a>
                 </li>
             </ul>
-        </li> --}}
+        </li>
 
         <li class="menu-item {{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}">
             <a href="{{ route('admin.notifications.index') }}" class="menu-link">
@@ -102,12 +102,12 @@
             </a>
         </li>
 
-        {{-- <li class="menu-item {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
+        <li class="menu-item {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
             <a href="{{ route('admin.reports.index') }}" class="menu-link">
                 <i class="menu-icon tf-icons mdi mdi-chart-box-outline"></i>
                 <div>Reports</div>
             </a>
-        </li> --}}
+        </li>
 
         <li class="menu-item {{ request()->routeIs('admin.support-options.*') || request()->routeIs('admin.privacy-policy.*') ? 'open' : '' }}">
             <a href="#" class="menu-link menu-toggle">

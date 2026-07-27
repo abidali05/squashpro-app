@@ -101,12 +101,22 @@
             <td>{{ $reg->created_at->format('Y-m-d H:i') }}</td>
             <td class="text-end">
                 @if($reg->registration_status !== 'cancelled')
-                    @include('admin.components.action-buttons', [
-                        'type'       => 'delete',
-                        'formAction' => route('admin.tournament-registrations.destroy', $reg),
-                        'confirm'    => "Are you sure you want to cancel this player's registration? This will mark it as cancelled and reduce the registered count.",
-                        'title'      => 'Cancel Registration',
-                    ])
+                    <div class="d-flex align-items-center justify-content-end gap-1">
+                        @if($reg->registration_status === 'pending')
+                            <form action="{{ route('admin.tournament-registrations.approve', $reg) }}" method="POST" class="d-inline">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-success" title="Accept Registration">
+                                    <i class="mdi mdi-check-circle-outline"></i> Accept
+                                </button>
+                            </form>
+                        @endif
+                        @include('admin.components.action-buttons', [
+                            'type'       => 'delete',
+                            'formAction' => route('admin.tournament-registrations.destroy', $reg),
+                            'confirm'    => "Are you sure you want to cancel this player's registration? This will mark it as cancelled and reduce the registered count.",
+                            'title'      => 'Cancel Registration',
+                        ])
+                    </div>
                 @else
                     <span class="text-muted small">No actions</span>
                 @endif

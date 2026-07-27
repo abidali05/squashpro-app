@@ -1005,6 +1005,43 @@ class ClubService
         })->filter()->values()->toArray();
     }
 
+    public function acceptRegistration(User $club, int $tournamentId, int $registrationId): TournamentRegistration
+    {
+        return DB::transaction(function () use ($club, $tournamentId, $registrationId) {
+            $tournament = Tournament::query()
+                ->whereKey($tournamentId)
+                ->first();
+
+            if (!$tournament) {
+                $this->apiError('Tournament does not exist.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+            }
+
+            // Verify authorization: only the organizing club can approve registrations
+            if ((int) $tournament->club_id !== (int) $club->id) {
+                $this->apiError('You are not authorized to accept registrations for this tournament.', 'UNAUTHORIZED_ACCESS', 403);
+            }
+
+            $registration = TournamentRegistration::where('tournament_id', $tournament->id)
+                ->whereKey($registrationId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$registration) {
+                $this->apiError('Registration not found.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+            }
+
+            if ($registration->registration_status !== 'pending') {
+                $this->apiError('Only pending registrations can be accepted.', ApiErrorCode::VALIDATION_ERROR, 400);
+            }
+
+            $registration->update([
+                'registration_status' => 'accepted',
+            ]);
+
+            return $registration;
+        });
+    }
+
     private function apiError(string $message, string $code, int $status = 422): never
     {
         throw new HttpResponseException(response()->json([

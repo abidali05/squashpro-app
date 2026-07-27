@@ -96,6 +96,11 @@
                 <input type="hidden" name="sort" value="{{ $sort }}">
                 <input type="hidden" name="direction" value="{{ $direction }}">
                 <input type="hidden" name="per_page" value="{{ $perPage }}">
+                @foreach(request()->query() as $key => $value)
+                    @if(!in_array($key, ['sort', 'direction', 'per_page', 'search', 'page'], true) && !collect($filters)->pluck('name')->contains($key))
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
 
                 <div class="{{ $searchCol }}">
                     <label class="form-label">Search</label>
