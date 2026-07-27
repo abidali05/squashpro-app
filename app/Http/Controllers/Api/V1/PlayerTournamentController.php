@@ -92,4 +92,28 @@ class PlayerTournamentController extends Controller
             ],
         ]);
     }
+
+    public function completePayment(Request $request, string $tournament_id): JsonResponse
+    {
+        $request->validate([
+            'payment_method_id' => ['required', 'string', 'in:card,wallet,cash,jazzcash,easypaisa'],
+        ]);
+
+        $registration = $this->playerTournamentService->completePayment(
+            $request->user(),
+            (int) $tournament_id,
+            $request->string('payment_method_id')->toString()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment completed successfully. Enrollment confirmed.',
+            'data' => [
+                'registration_id' => $registration->id,
+                'registration_status' => $registration->registration_status,
+                'payment_status' => $registration->payment_status,
+                'tournament_id' => $registration->tournament_id,
+            ],
+        ]);
+    }
 }

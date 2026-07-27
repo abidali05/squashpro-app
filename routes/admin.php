@@ -17,6 +17,9 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BookingReviewManagementController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\NotificationManagementController;
+use App\Http\Controllers\Admin\PaymentController;
+use App\Http\Controllers\Admin\RevenueReportController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserRoleController;
 use Illuminate\Support\Facades\Route;
@@ -82,13 +85,15 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
 
         // Tournament Registrations
         Route::get('tournament-registrations', [TournamentRegistrationController::class, 'index'])->name('tournament-registrations.index');
+        Route::post('tournament-registrations/{registration}/approve', [TournamentRegistrationController::class, 'approve'])->name('tournament-registrations.approve');
         Route::delete('tournament-registrations/{registration}', [TournamentRegistrationController::class, 'destroy'])->name('tournament-registrations.destroy');
-        Route::get('payments', [ModulePlaceholderController::class, 'index'])->defaults('module', 'payments')->name('payments.index');
-        Route::get('revenue-reports', [ModulePlaceholderController::class, 'index'])->defaults('module', 'revenue reports')->name('revenue.index');
+        Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::get('revenue-reports', [RevenueReportController::class, 'index'])->name('revenue.index');
         Route::get('notifications', [NotificationManagementController::class, 'index'])->name('notifications.index');
         Route::delete('notifications/{notification}', [NotificationManagementController::class, 'destroy'])->name('notifications.destroy');
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-        Route::get('settings', [ModulePlaceholderController::class, 'index'])->defaults('module', 'settings')->name('settings.index');
+        Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::post('settings', [SettingsController::class, 'update'])->name('settings.update');
 
         Route::resource('support-options', SupportOptionController::class)->except(['show']);
         Route::get('privacy-policy', [PrivacyPolicyController::class, 'edit'])->name('privacy-policy.edit');

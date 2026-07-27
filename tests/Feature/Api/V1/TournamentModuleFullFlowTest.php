@@ -400,6 +400,44 @@ class TournamentModuleFullFlowTest extends TestCase
             'status' => 'open',
         ]);
 
+        // 5. Create an admin user and an admin-created tournament matching player1 profile
+        $adminUser = User::factory()->create([
+            'role' => 'admin',
+            'status' => 'active',
+        ]);
+        $adminTournament = Tournament::create([
+            'club_id' => $adminUser->id,
+            'name' => 'Nationwide Cup',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'OPEN',
+            'gender' => 'MALE',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-25',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'created_by_admin' => true,
+        ]);
+
+        // 6. Create an admin-created tournament NOT matching player1 profile (gender FEMALE)
+        $adminTournamentNonMatching = Tournament::create([
+            'club_id' => $adminUser->id,
+            'name' => 'Nationwide Female Cup',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'OPEN',
+            'gender' => 'FEMALE',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-25',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'created_by_admin' => true,
+        ]);
+
         // Request visibility as player1 (member of club2)
         $response = $this->getJson(
             '/api/v1/player/tournaments',
@@ -408,17 +446,21 @@ class TournamentModuleFullFlowTest extends TestCase
 
         $response->assertOk();
         // player1 should see:
-        // - c2cTournament (because they are member of club2 which is invited opponent club)
         // - membersOnlyClub2 (because they are member of club2 and match criteria)
+        // - adminTournament (because it is created by admin and matches criteria)
         // player1 should NOT see:
+        // - c2cTournament (CLUB_TO_CLUB is not visible to players)
         // - membersOnlyClub3 (because they are not a member of club3)
         // - membersOnlyClub2NonMatching (because gender criteria does not match)
+        // - adminTournamentNonMatching (because gender criteria does not match)
         
         $ids = collect($response->json('data'))->pluck('tournament_id')->toArray();
-        $this->assertContains($c2cTournament->id, $ids);
+        $this->assertNotContains($c2cTournament->id, $ids);
         $this->assertContains($membersOnlyClub2->id, $ids);
         $this->assertNotContains($membersOnlyClub3->id, $ids);
         $this->assertNotContains($membersOnlyClub2NonMatching->id, $ids);
+        $this->assertContains($adminTournament->id, $ids);
+        $this->assertNotContains($adminTournamentNonMatching->id, $ids);
     }
 
     public function test_club_can_list_both_organized_and_invited_tournaments(): void
@@ -546,5 +588,151 @@ class TournamentModuleFullFlowTest extends TestCase
             "/api/v1/club/tournaments/999999/team",
             ['Authorization' => "Bearer {$this->token1}"]
         )->assertStatus(404);
+    }
+
+    public function test_tournament_registration_payment_flow(): void
+    {
+        Notification::fake();
+
+        // 1. Create a club-hosted CLUB_MEMBERS_ONLY tournament with entry fees
+        $tournament = Tournament::create([
+            'club_id' => $this->club2->id,
+            'name' => 'Paid Tournament Trophy',
+            'format' => 'Knockout',
+            'start_date' => '2026-09-20',
+            'end_date' => '2026-09-22',
+            'registration_deadline' => '2026-09-15T18:00:00Z',
+            'tournament_type' => 'CLUB_MEMBERS_ONLY',
+            'gender' => 'MALE',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-25',
+            'maximum_players' => 10,
+            'entry_fees' => 2500.00,
+            'prize_pool' => 10000.00,
+            'status' => 'open',
+            'allowed_player' => 10,
+        ]);
+
+        // A. If a player accepts participation:
+        // Since it has entry fees, status is 'accepted', payment status is 'pending'
+        $responseAccept = $this->patchJson(
+            "/api/v1/player/tournaments/{$tournament->id}/participation",
+            ['decision' => 'ACCEPT'],
+            ['Authorization' => "Bearer {$this->playerToken1}"]
+        );
+        $responseAccept->assertOk();
+        $responseAccept->assertJsonPath('data.status', 'accepted');
+
+        $this->assertDatabaseHas('tournament_registrations', [
+            'tournament_id' => $tournament->id,
+            'player_id' => $this->player1->id,
+            'registration_status' => 'accepted',
+            'payment_status' => 'pending',
+            'amount' => 2500.00,
+        ]);
+
+        // The count is still 0
+        $tournament->refresh();
+        $this->assertEquals(0, $tournament->registered_players_count);
+
+        // B. Make payment to finalize registration
+        $responsePay = $this->postJson(
+            "/api/v1/player/tournament/{$tournament->id}/payment",
+            ['payment_method_id' => 'jazzcash'],
+            ['Authorization' => "Bearer {$this->playerToken1}"]
+        );
+        $responsePay->assertOk();
+        $responsePay->assertJsonPath('data.registration_status', 'registered');
+        $responsePay->assertJsonPath('data.payment_status', 'paid');
+
+        $this->assertDatabaseHas('tournament_registrations', [
+            'tournament_id' => $tournament->id,
+            'player_id' => $this->player1->id,
+            'registration_status' => 'registered',
+            'payment_status' => 'paid',
+            'payment_method_id' => 'jazzcash',
+        ]);
+
+        // The count is now 1
+        $tournament->refresh();
+        $this->assertEquals(1, $tournament->registered_players_count);
+    }
+
+    public function test_open_tournament_registration_approval_and_payment_flow(): void
+    {
+        Notification::fake();
+
+        // 1. Create an admin-created OPEN tournament with entry fees
+        $tournament = Tournament::create([
+            'club_id' => $this->club2->id, // hosted at club2
+            'name' => 'Paid Open Trophy',
+            'format' => 'Knockout',
+            'start_date' => '2026-09-20',
+            'end_date' => '2026-09-22',
+            'registration_deadline' => '2026-09-15T18:00:00Z',
+            'tournament_type' => 'OPEN',
+            'gender' => 'MALE',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-25',
+            'maximum_players' => 10,
+            'entry_fees' => 3000.00,
+            'prize_pool' => 15000.00,
+            'status' => 'open',
+            'allowed_player' => 10,
+            'created_by_admin' => true,
+        ]);
+
+        // A. Player registers:
+        // Since it has entry fees, status starts as 'pending'
+        $responseRegister = $this->postJson(
+            '/api/v1/player/tournament/register',
+            [
+                'tournament_id' => $tournament->id,
+                'payment_method_id' => 'easypaisa'
+            ],
+            ['Authorization' => "Bearer {$this->playerToken1}"]
+        );
+        $responseRegister->assertCreated();
+        $responseRegister->assertJsonPath('data.registration_status', 'pending');
+        $responseRegister->assertJsonPath('data.payment_status', 'pending');
+
+        $this->assertDatabaseHas('tournament_registrations', [
+            'tournament_id' => $tournament->id,
+            'player_id' => $this->player1->id,
+            'registration_status' => 'pending',
+            'payment_status' => 'pending',
+            'amount' => 3000.00,
+        ]);
+
+        // B. Try to pay before acceptance -> 400 Bad Request
+        $this->postJson(
+            "/api/v1/player/tournament/{$tournament->id}/payment",
+            ['payment_method_id' => 'easypaisa'],
+            ['Authorization' => "Bearer {$this->playerToken1}"]
+        )->assertStatus(400);
+
+        // C. Club accepts the registration request -> 200 OK
+        $registration = TournamentRegistration::where('tournament_id', $tournament->id)->where('player_id', $this->player1->id)->first();
+        $responseAccept = $this->patchJson(
+            "/api/v1/club/tournaments/{$tournament->id}/registrations/{$registration->id}/accept",
+            [],
+            ['Authorization' => "Bearer {$this->token2}"]
+        );
+        $responseAccept->assertOk();
+        $responseAccept->assertJsonPath('data.registration_status', 'accepted');
+
+        // D. Player pays -> 200 OK
+        $responsePay = $this->postJson(
+            "/api/v1/player/tournament/{$tournament->id}/payment",
+            ['payment_method_id' => 'easypaisa'],
+            ['Authorization' => "Bearer {$this->playerToken1}"]
+        );
+        $responsePay->assertOk();
+        $responsePay->assertJsonPath('data.registration_status', 'registered');
+        $responsePay->assertJsonPath('data.payment_status', 'paid');
+
+        // Check count
+        $tournament->refresh();
+        $this->assertEquals(1, $tournament->registered_players_count);
     }
 }

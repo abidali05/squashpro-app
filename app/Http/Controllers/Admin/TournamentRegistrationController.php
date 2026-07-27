@@ -63,21 +63,38 @@ class TournamentRegistrationController extends Controller
         ));
     }
 
+    public function approve(TournamentRegistration $registration): RedirectResponse
+    {
+        if ($registration->registration_status !== 'pending') {
+            return redirect()->back()->with('error', 'Only pending registration requests can be accepted.');
+        }
+
+        $registration->update([
+            'registration_status' => 'accepted',
+        ]);
+
+        return redirect()->route('admin.tournament-registrations.index')->with('success', 'Tournament registration request accepted. Player can now proceed with payment.');
+    }
+
     public function destroy(TournamentRegistration $registration): RedirectResponse
     {
+        $oldStatus = $registration->registration_status;
+
         // Cancel the registration
         $registration->update([
             'registration_status' => 'cancelled',
         ]);
 
-        // Decrement the tournament count
-        $tournament = $registration->tournament;
-        if ($tournament) {
-            $tournament->registered_players_count = max(0, ((int) $tournament->registered_players_count) - 1);
-            if ($tournament->status === 'full' && (int) $tournament->registered_players_count < (int) $tournament->allowed_player) {
-                $tournament->status = 'open';
+        // Decrement the tournament count only if it was fully registered
+        if ($oldStatus === 'registered') {
+            $tournament = $registration->tournament;
+            if ($tournament) {
+                $tournament->registered_players_count = max(0, ((int) $tournament->registered_players_count) - 1);
+                if ($tournament->status === 'full' && (int) $tournament->registered_players_count < (int) $tournament->allowed_player) {
+                    $tournament->status = 'open';
+                }
+                $tournament->save();
             }
-            $tournament->save();
         }
 
         return redirect()->route('admin.tournament-registrations.index')->with('success', 'Tournament registration cancelled successfully.');

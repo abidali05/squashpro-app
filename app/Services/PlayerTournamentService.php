@@ -30,17 +30,30 @@ class PlayerTournamentService
             ->get();
 
         $filtered = $allTournaments->filter(function (Tournament $tournament) use ($player) {
-            // 1. Membership Check: Player must be an approved member of the organizing club (or the opponent club for CLUB_TO_CLUB tournaments)
-            $isMember = ClubMembership::where('player_id', $player->id)
-                ->where('status', 'approved')
-                ->where(function ($query) use ($tournament) {
-                    $query->where('club_id', $tournament->club_id)
-                        ->when($tournament->opponent_club_id, fn ($q) => $q->orWhere('club_id', $tournament->opponent_club_id));
-                })
-                ->exists();
+            $creatorRole = $tournament->club?->role;
 
-            if (!$isMember) {
+            // CLUB_TO_CLUB tournaments are never shown to players
+            if ($tournament->tournament_type === 'CLUB_TO_CLUB') {
                 return false;
+            }
+
+            // If created by admin, skip membership check
+            if ($tournament->created_by_admin) {
+                // Admin-created: no membership check
+            } else {
+                // Club-created: must be CLUB_MEMBERS_ONLY
+                if ($tournament->tournament_type !== 'CLUB_MEMBERS_ONLY') {
+                    return false;
+                }
+
+                $isMember = ClubMembership::where('player_id', $player->id)
+                    ->where('club_id', $tournament->club_id)
+                    ->where('status', 'approved')
+                    ->exists();
+
+                if (!$isMember) {
+                    return false;
+                }
             }
 
             // 2. Criteria Matching (gender, player_level, age_group):
@@ -154,14 +167,19 @@ class PlayerTournamentService
                 $this->apiError('Only upcoming open tournaments can accept registrations.', ApiErrorCode::VALIDATION_ERROR);
             }
 
-            $alreadyRegistered = TournamentRegistration::query()
+            $existing = TournamentRegistration::query()
                 ->where('tournament_id', $tournament->id)
                 ->where('player_id', $player->id)
-                ->where('registration_status', 'registered')
-                ->exists();
+                ->first();
 
-            if ($alreadyRegistered) {
-                $this->apiError('Player is already registered in this tournament.', ApiErrorCode::DUPLICATE_RESOURCE);
+            if ($existing) {
+                if ($existing->registration_status === 'registered') {
+                    $this->apiError('Player is already registered in this tournament.', ApiErrorCode::DUPLICATE_RESOURCE);
+                } elseif ($existing->registration_status === 'pending') {
+                    $this->apiError('Player registration request is pending approval.', ApiErrorCode::DUPLICATE_RESOURCE);
+                } elseif ($existing->registration_status === 'accepted') {
+                    $this->apiError('Player registration is already accepted. Please complete the payment.', ApiErrorCode::VALIDATION_ERROR);
+                }
             }
 
             if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
@@ -171,24 +189,36 @@ class PlayerTournamentService
                 $this->apiError('Tournament is full.', ApiErrorCode::VALIDATION_ERROR);
             }
 
-            $registration = TournamentRegistration::create([
-                'tournament_id' => $tournament->id,
-                'player_id' => $player->id,
-                'payment_method_id' => $paymentMethodId,
-                'payment_status' => 'paid',
-                'registration_status' => 'registered',
-                'amount' => $tournament->entry_fees,
-                'currency' => 'PKR',
-            ]);
+            if ($tournament->entry_fees > 0) {
+                $registration = TournamentRegistration::create([
+                    'tournament_id' => $tournament->id,
+                    'player_id' => $player->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'payment_status' => 'pending',
+                    'registration_status' => 'pending',
+                    'amount' => $tournament->entry_fees,
+                    'currency' => 'PKR',
+                ]);
+            } else {
+                $registration = TournamentRegistration::create([
+                    'tournament_id' => $tournament->id,
+                    'player_id' => $player->id,
+                    'payment_method_id' => $paymentMethodId,
+                    'payment_status' => 'paid',
+                    'registration_status' => 'registered',
+                    'amount' => 0,
+                    'currency' => 'PKR',
+                ]);
 
-            $tournament->registered_players_count = ((int) $tournament->registered_players_count) + 1;
-            if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
-                $tournament->status = 'full';
+                $tournament->registered_players_count = ((int) $tournament->registered_players_count) + 1;
+                if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
+                    $tournament->status = 'full';
+                }
+                $tournament->save();
+
+                $registration = $registration->load(['tournament.club', 'player']);
+                $registration->tournament->club?->notify((new TournamentRegisteredNotification($registration))->afterCommit());
             }
-            $tournament->save();
-
-            $registration = $registration->load(['tournament.club', 'player']);
-            $registration->tournament->club?->notify((new TournamentRegisteredNotification($registration))->afterCommit());
 
             return $registration;
         });
@@ -278,58 +308,93 @@ class PlayerTournamentService
                     $this->apiError('Tournament capacity reached.', 'CAPACITY_REACHED', 409);
                 }
 
-                // Register
-                TournamentRegistration::updateOrCreate(
-                    [
-                        'tournament_id' => $tournament->id,
-                        'player_id' => $player->id,
-                    ],
-                    [
-                        'payment_method_id' => 'members_only',
-                        'payment_status' => 'paid',
-                        'registration_status' => 'registered',
-                        'amount' => $tournament->entry_fees ?? 0,
-                        'currency' => 'PKR',
-                    ]
-                );
+                if ($tournament->entry_fees > 0) {
+                    // Requires entry fees: status is accepted (invited by club), payment pending
+                    $registration = TournamentRegistration::updateOrCreate(
+                        [
+                            'tournament_id' => $tournament->id,
+                            'player_id' => $player->id,
+                        ],
+                        [
+                            'payment_method_id' => 'members_only',
+                            'payment_status' => 'pending',
+                            'registration_status' => 'accepted',
+                            'amount' => $tournament->entry_fees ?? 0,
+                            'currency' => 'PKR',
+                        ]
+                    );
 
-                // Increment count
-                $tournament->registered_players_count = ((int) $tournament->registered_players_count) + 1;
-                if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
-                    $tournament->status = 'full';
+                    // Log audit history
+                    AuditLogger::log(
+                        actorId: $player->id,
+                        action: 'accept_tournament_participation_pending_payment',
+                        entityType: Tournament::class,
+                        entityId: $tournament->id,
+                        before: null,
+                        after: ['status' => 'accepted']
+                    );
+
+                    // Notify player
+                    $player->notify(new PlayerParticipationNotification($tournament, 'ACCEPT'));
+
+                    return 'accepted';
+                } else {
+                    // Free: directly registered
+                    $registration = TournamentRegistration::updateOrCreate(
+                        [
+                            'tournament_id' => $tournament->id,
+                            'player_id' => $player->id,
+                        ],
+                        [
+                            'payment_method_id' => 'members_only',
+                            'payment_status' => 'paid',
+                            'registration_status' => 'registered',
+                            'amount' => 0,
+                            'currency' => 'PKR',
+                        ]
+                    );
+
+                    // Increment count
+                    $tournament->registered_players_count = ((int) $tournament->registered_players_count) + 1;
+                    if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
+                        $tournament->status = 'full';
+                    }
+                    $tournament->save();
+
+                    // Log audit history
+                    AuditLogger::log(
+                        actorId: $player->id,
+                        action: 'accept_tournament_participation',
+                        entityType: Tournament::class,
+                        entityId: $tournament->id,
+                        before: null,
+                        after: ['status' => 'registered']
+                    );
+
+                    // Notify player
+                    $player->notify(new PlayerParticipationNotification($tournament, 'ACCEPT'));
+
+                    return 'registered';
                 }
-                $tournament->save();
-
-                // Log audit history
-                AuditLogger::log(
-                    actorId: $player->id,
-                    action: 'accept_tournament_participation',
-                    entityType: Tournament::class,
-                    entityId: $tournament->id,
-                    before: null,
-                    after: ['status' => 'registered']
-                );
-
-                // Notify player
-                $player->notify(new PlayerParticipationNotification($tournament, 'ACCEPT'));
-
-                return 'registered';
             } else {
                 // REJECT decision
                 $registration = TournamentRegistration::where('tournament_id', $tournament->id)
                     ->where('player_id', $player->id)
                     ->first();
 
-                if ($registration && $registration->registration_status === 'registered') {
+                if ($registration && in_array($registration->registration_status, ['registered', 'accepted', 'pending'], true)) {
+                    $oldStatus = $registration->registration_status;
                     $registration->registration_status = 'cancelled';
                     $registration->save();
 
-                    // Decrement count
-                    $tournament->registered_players_count = max(0, ((int) $tournament->registered_players_count) - 1);
-                    if ($tournament->status === 'full' && (int) $tournament->registered_players_count < (int) $tournament->allowed_player) {
-                        $tournament->status = 'open';
+                    // Only decrement count if it was fully registered
+                    if ($oldStatus === 'registered') {
+                        $tournament->registered_players_count = max(0, ((int) $tournament->registered_players_count) - 1);
+                        if ($tournament->status === 'full' && (int) $tournament->registered_players_count < (int) $tournament->allowed_player) {
+                            $tournament->status = 'open';
+                        }
+                        $tournament->save();
                     }
-                    $tournament->save();
                 }
 
                 // Log audit
@@ -347,6 +412,73 @@ class PlayerTournamentService
 
                 return 'cancelled';
             }
+        });
+    }
+
+    public function completePayment(User $player, int $tournamentId, string $paymentMethodId): TournamentRegistration
+    {
+        return DB::transaction(function () use ($player, $tournamentId, $paymentMethodId) {
+            $tournament = Tournament::query()
+                ->whereKey($tournamentId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$tournament) {
+                $this->apiError('Tournament does not exist.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+            }
+
+            $registration = TournamentRegistration::where('tournament_id', $tournament->id)
+                ->where('player_id', $player->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$registration) {
+                $this->apiError('No registration request found for this tournament.', ApiErrorCode::RECORD_NOT_FOUND, 404);
+            }
+
+            if ($registration->registration_status === 'registered') {
+                $this->apiError('Registration is already completed.', ApiErrorCode::VALIDATION_ERROR, 409);
+            }
+
+            if ($registration->registration_status !== 'accepted') {
+                $this->apiError('Registration request has not been accepted yet.', ApiErrorCode::VALIDATION_ERROR, 400);
+            }
+
+            if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
+                $tournament->status = 'full';
+                $tournament->save();
+                $this->apiError('Tournament is full.', ApiErrorCode::VALIDATION_ERROR, 409);
+            }
+
+            // Update registration status to registered & payment status to paid
+            $registration->update([
+                'payment_method_id' => $paymentMethodId,
+                'payment_status' => 'paid',
+                'registration_status' => 'registered',
+            ]);
+
+            // Increment tournament players count
+            $tournament->registered_players_count = ((int) $tournament->registered_players_count) + 1;
+            if ((int) $tournament->registered_players_count >= (int) $tournament->allowed_player) {
+                $tournament->status = 'full';
+            }
+            $tournament->save();
+
+            // Log audit history
+            AuditLogger::log(
+                actorId: $player->id,
+                action: 'complete_tournament_payment',
+                entityType: Tournament::class,
+                entityId: $tournament->id,
+                before: null,
+                after: ['status' => 'registered']
+            );
+
+            // Notify organizer
+            $registration = $registration->load(['tournament.club', 'player']);
+            $registration->tournament->club?->notify((new TournamentRegisteredNotification($registration))->afterCommit());
+
+            return $registration;
         });
     }
 

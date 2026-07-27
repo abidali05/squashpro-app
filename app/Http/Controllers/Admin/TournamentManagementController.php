@@ -144,6 +144,7 @@ class TournamentManagementController extends Controller
             'tournament_image' => $imagePath,
             'allowed_player' => $validated['maximum_players'],
             'status' => 'open',
+            'created_by_admin' => true,
         ]));
 
         return redirect()->route('admin.tournaments.index')->with('success', 'Tournament created successfully.');

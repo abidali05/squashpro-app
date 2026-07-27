@@ -12,15 +12,49 @@ class BookingDetailResource extends JsonResource
     {
         $courtPrice = (float) ($this->court_price ?? 0);
 
+        $membership = \App\Models\ClubMembership::where('player_id', $this->player_id)
+            ->where('club_id', $this->club_id)
+            ->first();
+
+        $isMember = $membership && $membership->status === 'approved';
+        $membershipNumber = $membership?->membership_number;
+        $membershipStatus = $membership?->status;
+
+        $club = $this->club;
+        $allowNonMemberBooking = $club ? (bool) $club->non_member_booking_allowed : false;
+        $canPay = !$isMember && $allowNonMemberBooking;
+
+        $player = $this->player;
+        $dob = $player?->dob;
+        $age = null;
+        if ($dob instanceof \Carbon\Carbon) {
+            $age = $dob->age;
+        } elseif (is_string($dob)) {
+            try {
+                $age = \Carbon\Carbon::parse($dob)->age;
+            } catch (\Throwable $e) {
+                $age = null;
+            }
+        }
+
         return [
             'booking_id' => $this->id,
             'status' => $this->booking_status,
             'rejection_reason' => $this->rejection_reason,
             'player_detail' => [
-                'player_id' => $this->player?->id,
-                'name' => $this->player?->name,
-                'email' => $this->player?->email,
-                'phone' => $this->player?->phone,
+                'player_id' => $player?->id,
+                'name' => $player?->name,
+                'email' => $player?->email,
+                'phone' => $player?->phone,
+                'profile_image' => $player?->profile_image ? asset('storage/' . $player->profile_image) : null,
+                'gender' => $player?->gender,
+                'playing_level' => $player?->playing_level,
+                'dob' => $dob instanceof \Carbon\Carbon ? $dob->toDateString() : (is_string($dob) ? $dob : null),
+                'age' => $age,
+                'is_member' => $isMember,
+                'membership_status' => $membershipStatus,
+                'membership_number' => $membershipNumber,
+                'can_pay' => $canPay,
             ],
             'court_detail' => [
                 'court_id' => $this->court?->id,

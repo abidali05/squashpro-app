@@ -28,6 +28,7 @@ class Tournament extends Model
         'registered_players_count',
         'status',
         'rules',
+        'created_by_admin',
     ];
 
     protected function casts(): array
@@ -43,6 +44,7 @@ class Tournament extends Model
             'registered_players_count' => 'integer',
             'player_level' => 'array',
             'opponent_club_id' => 'integer',
+            'created_by_admin' => 'boolean',
         ];
     }
 

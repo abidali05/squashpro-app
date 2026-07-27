@@ -13,6 +13,10 @@ class PlayerTournamentDetailResource extends JsonResource
 
     public function toArray(Request $request): array
     {
+        $registration = \App\Models\TournamentRegistration::where('tournament_id', $this->id)
+            ->where('player_id', $request->user()?->id)
+            ->first();
+
         return [
             'tournament_id'         => $this->id,
             'tournament_image'      => $this->imageUrl($this->tournament_image),
@@ -27,7 +31,7 @@ class PlayerTournamentDetailResource extends JsonResource
             'prize_pool'            => $this->normalizeNumber($this->prize_pool),
             'registered_players'    => ((int) $this->registered_players_count) . '/' . ((int) $this->allowed_player),
             'rules'                 => $this->rules,
-            'is_registered'         => (bool) $this->is_registered,
+            'is_registered'         => (bool) ($registration && $registration->registration_status === 'registered'),
             
             // New fields
             'tournament_type'       => $this->tournament_type,
@@ -36,6 +40,15 @@ class PlayerTournamentDetailResource extends JsonResource
             'player_level'          => $this->player_level,
             'age_group'             => $this->age_group,
             'maximum_players'       => $this->maximum_players,
+
+            // Registration details
+            'registration'          => $registration ? [
+                'id'                  => $registration->id,
+                'registration_status' => $registration->registration_status,
+                'payment_status'      => $registration->payment_status,
+                'amount'              => $this->normalizeNumber($registration->amount),
+                'currency'            => $registration->currency,
+            ] : null,
         ];
     }
 

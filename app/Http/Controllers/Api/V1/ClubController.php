@@ -371,6 +371,25 @@ class ClubController extends Controller
         ]);
     }
 
+    public function acceptRegistration(Request $request, string $tournament_id, string $registration_id): JsonResponse
+    {
+        $registration = $this->clubService->acceptRegistration(
+            $request->user(),
+            (int) $tournament_id,
+            (int) $registration_id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament registration request accepted.',
+            'data' => [
+                'registration_id' => $registration->id,
+                'registration_status' => $registration->registration_status,
+                'payment_status' => $registration->payment_status,
+            ],
+        ]);
+    }
+
     private function imageUrl(?string $path): ?string
     {
         if (! $path) {
