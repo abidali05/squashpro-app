@@ -21,11 +21,20 @@ class StoreTournamentRequest extends FormRequest
                 ]);
             }
         }
+
+        // Support backward compatibility for opponent_club_id
+        if ($this->filled('opponent_club_id') && !$this->has('invited_club_ids')) {
+            $this->merge([
+                'invited_club_ids' => [(int) $this->opponent_club_id],
+            ]);
+        }
     }
 
     public function rules(): array
     {
-        return [
+        $isLegacy = $this->filled('opponent_club_id') && !$this->has('host_team_player_ids');
+
+        $rules = [
             'tournament_image' => ['nullable'],
             'name' => ['required', 'string', 'max:255'],
             'format' => ['required', 'string', 'max:100'],
@@ -39,20 +48,55 @@ class StoreTournamentRequest extends FormRequest
             
             // New Tournament Fields
             'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY'],
-            'opponent_club_id' => [
-                'required_if:tournament_type,CLUB_TO_CLUB',
-                'nullable',
-                'integer',
-                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
-                    $q->where('role', 'club')->where('status', 'active');
-                }),
-            ],
             'gender' => ['required', 'string', 'in:MALE,FEMALE,MIXED,OPEN'],
             'player_level' => ['required', 'array', 'min:1'],
             'player_level.*' => ['required', 'string'],
             'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
             'maximum_players' => ['required', 'integer', 'min:1'],
         ];
+
+        if ($isLegacy) {
+            $rules['opponent_club_id'] = [
+                'required_if:tournament_type,CLUB_TO_CLUB',
+                'nullable',
+                'integer',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+                    $q->where('role', 'club')->where('status', 'active');
+                }),
+            ];
+            $rules['invited_club_ids'] = ['nullable', 'array'];
+            $rules['invited_club_ids.*'] = ['integer'];
+        } else {
+            $rules['invited_club_ids'] = [
+                'required_if:tournament_type,CLUB_TO_CLUB',
+                'array',
+                'min:1'
+            ];
+            $rules['invited_club_ids.*'] = [
+                'required_with:invited_club_ids',
+                'integer',
+                'distinct',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+                    $q->where('role', 'club')->where('status', 'active');
+                }),
+            ];
+
+            $rules['host_team_player_ids'] = [
+                'required_if:tournament_type,CLUB_TO_CLUB',
+                'array',
+                'min:1'
+            ];
+            $rules['host_team_player_ids.*'] = [
+                'required_with:host_team_player_ids',
+                'integer',
+                'distinct',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+                    $q->where('role', 'player');
+                }),
+            ];
+        }
+
+        return $rules;
     }
 
     public function withValidator($validator): void
@@ -65,6 +109,7 @@ class StoreTournamentRequest extends FormRequest
 
         $validator->after(function ($validator) {
             $user = $this->user();
+            $isLegacy = $this->filled('opponent_club_id') && !$this->has('host_team_player_ids');
 
             if ($this->filled('start_date') && $this->filled('registration_deadline')) {
                 $start = \Illuminate\Support\Carbon::parse($this->input('start_date'));
@@ -83,8 +128,15 @@ class StoreTournamentRequest extends FormRequest
             }
 
             if ($this->input('tournament_type') === 'CLUB_TO_CLUB') {
-                if ($this->filled('opponent_club_id') && (int) $this->input('opponent_club_id') === $user->id) {
-                    $validator->errors()->add('opponent_club_id', 'Opponent club cannot be the organizing club itself.');
+                if ($isLegacy) {
+                    if ($this->filled('opponent_club_id') && (int) $this->input('opponent_club_id') === $user->id) {
+                        $validator->errors()->add('opponent_club_id', 'Opponent club cannot be the organizing club itself.');
+                    }
+                } else {
+                    $invitedIds = $this->input('invited_club_ids', []);
+                    if (in_array((int)$user->id, array_map('intval', $invitedIds), true)) {
+                        $validator->errors()->add('invited_club_ids', 'Organizing club cannot be invited as an opponent.');
+                    }
                 }
             }
         });

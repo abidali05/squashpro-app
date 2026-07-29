@@ -152,4 +152,76 @@ class ClubMembershipVerificationTest extends TestCase
             'type' => 'membership_rejected',
         ]);
     }
+
+    public function test_membership_approval_with_type_and_expiry(): void
+    {
+        $player = User::factory()->create(['role' => 'player', 'status' => 'active', 'name' => 'Mohammad Rizwan']);
+
+        $request1 = ClubMembershipRequest::create([
+            'club_id' => $this->club->id,
+            'player_id' => $player->id,
+            'membership_number' => 'CSC-888',
+            'status' => 'pending',
+        ]);
+
+        // 1. Omit expiry date for temporary membership -> fails (422)
+        $responseInvalid = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->patchJson("/api/v1/club/membership-requests/{$request1->id}/approve", [
+                'membership_type' => 'temporary',
+            ]);
+        $responseInvalid->assertStatus(422)
+            ->assertJsonValidationErrors(['membership_expiry_date']);
+
+        // 2. Pass past expiry date -> fails (422)
+        $responsePast = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->patchJson("/api/v1/club/membership-requests/{$request1->id}/approve", [
+                'membership_type' => 'temporary',
+                'membership_expiry_date' => '2020-01-01',
+            ]);
+        $responsePast->assertStatus(422)
+            ->assertJsonValidationErrors(['membership_expiry_date']);
+
+        // 3. Valid temporary membership -> succeeds (200)
+        $expiry = now()->addDays(30)->startOfDay();
+        $responseTemp = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->patchJson("/api/v1/club/membership-requests/{$request1->id}/approve", [
+                'membership_type' => 'temporary',
+                'membership_expiry_date' => $expiry->toDateString(),
+            ]);
+
+        $responseTemp->assertOk()
+            ->assertJsonPath('data.membership_type', 'temporary');
+
+        $this->assertDatabaseHas('club_memberships', [
+            'club_id' => $this->club->id,
+            'player_id' => $player->id,
+            'membership_type' => 'temporary',
+            'membership_expiry_date' => $expiry->format('Y-m-d H:i:s'),
+        ]);
+
+        // 4. Permanent membership -> succeeds (200) and expiry is null
+        $player2 = User::factory()->create(['role' => 'player', 'status' => 'active', 'name' => 'Fakhar Zaman']);
+        $request2 = ClubMembershipRequest::create([
+            'club_id' => $this->club->id,
+            'player_id' => $player2->id,
+            'membership_number' => 'CSC-777',
+            'status' => 'pending',
+        ]);
+
+        $responsePerm = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->patchJson("/api/v1/club/membership-requests/{$request2->id}/approve", [
+                'membership_type' => 'permanent',
+            ]);
+
+        $responsePerm->assertOk()
+            ->assertJsonPath('data.membership_type', 'permanent')
+            ->assertJsonPath('data.membership_expiry_date', null);
+
+        $this->assertDatabaseHas('club_memberships', [
+            'club_id' => $this->club->id,
+            'player_id' => $player2->id,
+            'membership_type' => 'permanent',
+            'membership_expiry_date' => null,
+        ]);
+    }
 }

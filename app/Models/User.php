@@ -48,6 +48,8 @@ class User extends Authenticatable
         'non_member_booking_start_time',
         'non_member_booking_end_time',
         'timezone',
+        'are_you_scorer',
+        'are_you_umpire',
     ];
 
     /**
@@ -74,7 +76,19 @@ class User extends Authenticatable
             'facilities' => 'array',
             'dob' => 'date',
             'non_member_booking_allowed' => 'boolean',
+            'are_you_scorer' => 'boolean',
+            'are_you_umpire' => 'boolean',
         ];
+    }
+
+    public function workingHoursSchedule(): HasMany
+    {
+        return $this->hasMany(ClubWorkingHour::class, 'club_id');
+    }
+
+    public function nonMemberWindows(): HasMany
+    {
+        return $this->hasMany(ClubNonMemberWindow::class, 'club_id');
     }
 
     public function courts(): HasMany

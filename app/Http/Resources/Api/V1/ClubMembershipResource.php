@@ -20,6 +20,8 @@ class ClubMembershipResource extends JsonResource
             'membership_number' => $this->membership_number,
             'status' => $this->status,
             'approved_at' => $this->approved_at?->toIso8601String(),
+            'membership_type' => $this->membership_type ?? 'temporary',
+            'membership_expiry_date' => $this->membership_expiry_date?->toIso8601String(),
             'player' => [
                 'id' => $player->id ?? null,
                 'first_name' => $firstName,

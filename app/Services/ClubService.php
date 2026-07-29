@@ -47,7 +47,45 @@ class ClubService
             }
 
             if (array_key_exists('working_hours', $data)) {
-                $club->working_hours = $data['working_hours'];
+                $workingHours = $data['working_hours'];
+                if (is_array($workingHours)) {
+                    \App\Models\ClubWorkingHour::where('club_id', $club->id)->delete();
+                    foreach ($workingHours as $wh) {
+                        \App\Models\ClubWorkingHour::create([
+                            'club_id' => $club->id,
+                            'day' => strtolower($wh['day']),
+                            'is_open' => filter_var($wh['is_open'], FILTER_VALIDATE_BOOLEAN),
+                            'opens_at' => $wh['opens_at'] ?? null,
+                            'closes_at' => $wh['closes_at'] ?? null,
+                        ]);
+                    }
+
+                    $firstOpenWh = collect($workingHours)->firstWhere('is_open', true);
+                    if ($firstOpenWh) {
+                        $club->working_hours = ($firstOpenWh['opens_at'] ?? '') . '-' . ($firstOpenWh['closes_at'] ?? '');
+                    } else {
+                        $club->working_hours = 'Closed';
+                    }
+                } else {
+                    $club->working_hours = $workingHours;
+
+                    $start = null;
+                    $end = null;
+                    if (preg_match('/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/', $workingHours, $matches)) {
+                        $start = $matches[1];
+                        $end = $matches[2];
+                    }
+                    if ($start && $end) {
+                        \App\Models\ClubWorkingHour::where('club_id', $club->id)->update([
+                            'opens_at' => $start,
+                            'closes_at' => $end,
+                            'is_open' => true,
+                        ]);
+                    }
+                }
+
+                // Check and move mismatching courts to maintenance automatically
+                $this->checkAndFlagCourtsForMaintenance($club);
             }
 
             if (array_key_exists('facilities', $data)) {
@@ -59,6 +97,59 @@ class ClubService
 
             return $club->refresh();
         });
+    }
+
+    public function checkAndFlagCourtsForMaintenance(User $club): void
+    {
+        $courts = $club->courts()->get();
+
+        foreach ($courts as $court) {
+            $slots = $court->slots()->get();
+
+            if ($slots->isEmpty()) {
+                continue;
+            }
+
+            $shouldMoveToMaintenance = false;
+
+            foreach ($slots as $slot) {
+                $day = strtolower($slot->day);
+                $workingHour = \App\Models\ClubWorkingHour::where('club_id', $club->id)
+                    ->where('day', $day)
+                    ->first();
+
+                if (!$workingHour || !$workingHour->is_open) {
+                    $shouldMoveToMaintenance = true;
+                    break;
+                }
+
+                $opensAt = substr((string)$workingHour->opens_at, 0, 5);
+                $closesAt = substr((string)$workingHour->closes_at, 0, 5);
+                $slotStart = substr((string)$slot->start_time, 0, 5);
+                $slotEnd = substr((string)$slot->end_time, 0, 5);
+
+                if (strcmp($slotStart, $opensAt) < 0 || strcmp($slotEnd, $closesAt) > 0) {
+                    $shouldMoveToMaintenance = true;
+                    break;
+                }
+            }
+
+            if ($shouldMoveToMaintenance && $court->status !== 'maintenance') {
+                $previousStatus = $court->status;
+
+                $court->status = 'maintenance';
+                $court->maintenance_note = 'Court moved to maintenance because configured slots are outside the updated club working hours.';
+                $court->save();
+
+                \App\Models\CourtStatusAudit::create([
+                    'court_id' => $court->id,
+                    'previous_status' => $previousStatus,
+                    'new_status' => 'maintenance',
+                    'reason' => 'Court moved to maintenance because configured slots are outside the updated club working hours.',
+                    'changed_at' => now(),
+                ]);
+            }
+        }
     }
 
     public function updateClubLogo(User $club, UploadedFile $logoFile): User
@@ -145,7 +236,19 @@ class ClubService
                 'maintenance_note' => $data['maintenance_note'] ?? null,
             ]);
 
-            $court = $court->refresh()->load('club');
+            if (isset($data['slots']) && is_array($data['slots'])) {
+                foreach ($data['slots'] as $slot) {
+                    $court->slots()->create([
+                        'day' => strtolower($slot['day']),
+                        'start_time' => $slot['start_time'],
+                        'end_time' => $slot['end_time'],
+                        'price' => $slot['price'],
+                        'is_available' => $slot['is_available'] ?? true,
+                    ]);
+                }
+            }
+
+            $court = $court->refresh()->load(['club', 'slots']);
             $this->notifyCityPlayersAboutCourtCreated($club, $court);
 
             return $court;
@@ -177,9 +280,22 @@ class ClubService
                 $court->maintenance_note = $data['maintenance_note'];
             }
 
+            if (array_key_exists('slots', $data) && is_array($data['slots'])) {
+                $court->slots()->delete();
+                foreach ($data['slots'] as $slot) {
+                    $court->slots()->create([
+                        'day' => strtolower($slot['day']),
+                        'start_time' => $slot['start_time'],
+                        'end_time' => $slot['end_time'],
+                        'price' => $slot['price'],
+                        'is_available' => $slot['is_available'] ?? true,
+                    ]);
+                }
+            }
+
             $court->save();
 
-            return $court->refresh();
+            return $court->refresh()->load('slots');
         });
     }
 
@@ -346,6 +462,10 @@ class ClubService
             $status = $tournamentType === 'CLUB_TO_CLUB' ? 'pending' : 'open';
             $maximumPlayers = (int) ($data['maximum_players'] ?? $data['allowed_player'] ?? 0);
 
+            // For backward compatibility, opponent_club_id fallback
+            $invitedClubIds = $data['invited_club_ids'] ?? [];
+            $opponentClubId = !empty($invitedClubIds) ? (int)$invitedClubIds[0] : ($data['opponent_club_id'] ?? null);
+
             $tournament = $club->tournaments()->create([
                 'name' => $data['name'],
                 'format' => $data['format'],
@@ -363,7 +483,7 @@ class ClubService
 
                 // New fields
                 'tournament_type' => $tournamentType,
-                'opponent_club_id' => $data['opponent_club_id'] ?? null,
+                'opponent_club_id' => $opponentClubId,
                 'gender' => $data['gender'] ?? 'OPEN',
                 'player_level' => $data['player_level'] ?? null,
                 'age_group' => $data['age_group'] ?? null,
@@ -372,25 +492,81 @@ class ClubService
             $tournament = $tournament->refresh()->load('club');
 
             if ($tournamentType === 'CLUB_TO_CLUB') {
-                // Audit log for invitation creation
-                AuditLogger::log(
-                    actorId: $club->id,
-                    action: 'create_tournament_invitation',
-                    entityType: Tournament::class,
-                    entityId: $tournament->id,
-                    before: null,
-                    after: [
+                // 1. Create separate invitation records for every invited club
+                foreach ($invitedClubIds as $invitedId) {
+                    \App\Models\TournamentInvitation::create([
                         'tournament_id' => $tournament->id,
-                        'tournament_name' => $tournament->name,
+                        'invited_club_id' => $invitedId,
                         'status' => 'pending',
-                        'opponent_club_id' => $tournament->opponent_club_id,
-                    ]
-                );
+                        'invited_at' => now(),
+                    ]);
 
-                // Notify opponent club
-                $opponent = User::find($tournament->opponent_club_id);
-                if ($opponent) {
-                    $opponent->notify(new TournamentInvitationNotification($tournament));
+                    // Audit log for invitation creation
+                    AuditLogger::log(
+                        actorId: $club->id,
+                        action: 'create_tournament_invitation',
+                        entityType: Tournament::class,
+                        entityId: $tournament->id,
+                        before: null,
+                        after: [
+                            'tournament_id' => $tournament->id,
+                            'tournament_name' => $tournament->name,
+                            'status' => 'pending',
+                            'opponent_club_id' => $invitedId,
+                        ]
+                    );
+
+                    // Notify opponent club
+                    $opponent = User::find($invitedId);
+                    if ($opponent) {
+                        $opponent->notify(new TournamentInvitationNotification($tournament));
+                    }
+                }
+
+                // 2. Submit the host club team transactionally
+                if (isset($data['host_team_player_ids']) && is_array($data['host_team_player_ids'])) {
+                    // Create tournament team for host
+                    $team = \App\Models\TournamentTeam::create([
+                        'tournament_id' => $tournament->id,
+                        'club_id' => $club->id,
+                        'submission_status' => 'submitted',
+                        'submitted_at' => now(),
+                    ]);
+
+                    foreach ($data['host_team_player_ids'] as $index => $pid) {
+                        // Validate eligibility of player
+                        $player = User::find($pid);
+                        if (!$player) {
+                            $this->apiError("Player ID {$pid} is not found.", 'PLAYER_NOT_FOUND', 422);
+                        }
+                        if (!$this->validatePlayerEligibility($player, $club, $tournament)) {
+                            $this->apiError("Player ID {$pid} is not eligible for this tournament.", 'PLAYER_NOT_ELIGIBLE', 422);
+                        }
+
+                        // Save in tournament_team_players
+                        \App\Models\TournamentTeamPlayer::create([
+                            'team_id' => $team->id,
+                            'player_id' => $pid,
+                            'position' => $index + 1,
+                        ]);
+
+                        // Save in legacy registrations table to keep legacy counts & assertions happy
+                        TournamentRegistration::create([
+                            'tournament_id' => $tournament->id,
+                            'player_id' => $pid,
+                            'payment_method_id' => 'club_submission',
+                            'payment_status' => 'paid',
+                            'registration_status' => 'registered',
+                            'amount' => $tournament->entry_fees ?? 0,
+                            'currency' => 'PKR',
+                        ]);
+                    }
+
+                    // Update registered count
+                    $tournament->registered_players_count = TournamentRegistration::where('tournament_id', $tournament->id)
+                        ->where('registration_status', 'registered')
+                        ->count();
+                    $tournament->save();
                 }
             } else {
                 // CLUB_MEMBERS_ONLY
@@ -777,6 +953,53 @@ class ClubService
         return $newStatus;
     }
 
+    public function validatePlayerEligibility(User $player, User $club, Tournament $tournament): bool
+    {
+        // 1. Must belong to the submitting club
+        $membership = ClubMembership::where('club_id', $club->id)
+            ->where('player_id', $player->id)
+            ->where('status', ClubMembership::STATUS_APPROVED)
+            ->first();
+
+        if (!$membership) {
+            return false;
+        }
+
+        // 2. Gender check
+        if ($tournament->gender && $tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            if (strtolower($player->gender) !== strtolower($tournament->gender)) {
+                return false;
+            }
+        }
+
+        // 3. Level check
+        if ($tournament->player_level && is_array($tournament->player_level)) {
+            $allowedLevels = array_map('strtolower', $tournament->player_level);
+            if (!in_array(strtolower($player->playing_level), $allowedLevels, true)) {
+                return false;
+            }
+        }
+
+        // 4. Age check
+        if ($tournament->age_group) {
+            $ageRange = explode('-', (string) $tournament->age_group);
+            $minAge = isset($ageRange[0]) ? (int) $ageRange[0] : null;
+            $maxAge = isset($ageRange[1]) ? (int) $ageRange[1] : null;
+
+            if ($minAge !== null && $maxAge !== null) {
+                if (!$player->dob) {
+                    return false;
+                }
+                $age = $player->dob->age;
+                if ($age < $minAge || $age > $maxAge) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
     public function eligiblePlayers(User $club, string $tournamentId, int $page = 1, int $limit = 20, ?string $search = null): array
     {
         $tournament = Tournament::find($tournamentId);
@@ -784,13 +1007,17 @@ class ClubService
             $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
         }
 
-        // Verify that the authenticated club is the invited club or organizing club
-        if ((int) $tournament->opponent_club_id !== $club->id && (int) $tournament->club_id !== $club->id) {
+        // Verify that the authenticated club is the invited club, organizing club, or in invitations
+        $isOrganizer = (int) $tournament->club_id === $club->id;
+        $isInvited = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('invited_club_id', $club->id)
+            ->exists();
+
+        if (!$isOrganizer && !$isInvited && (int) $tournament->opponent_club_id !== $club->id) {
             $this->apiError('You are not authorized to view eligible players for this tournament.', 'FORBIDDEN', 403);
         }
 
-        // Query approved memberships of the invited club
-        $invitedClubId = $tournament->opponent_club_id;
+        $targetClubId = $club->id;
 
         // Extract age range from age_group
         $ageRange = explode('-', (string) $tournament->age_group);
@@ -800,11 +1027,11 @@ class ClubService
         $query = User::query()
             ->where('role', 'player')
             ->where('status', 'active')
-            ->whereExists(function ($q) use ($invitedClubId) {
+            ->whereExists(function ($q) use ($targetClubId) {
                 $q->select(DB::raw(1))
                     ->from('club_memberships')
                     ->whereColumn('club_memberships.player_id', 'users.id')
-                    ->where('club_memberships.club_id', $invitedClubId)
+                    ->where('club_memberships.club_id', $targetClubId)
                     ->where('club_memberships.status', 'approved');
             });
 
@@ -831,13 +1058,13 @@ class ClubService
 
         // Search check (by name or membership number)
         if ($search) {
-            $query->where(function ($q) use ($search, $invitedClubId) {
+            $query->where(function ($q) use ($search, $targetClubId) {
                 $q->where('name', 'like', "%{$search}%")
-                    ->orWhereExists(function ($sub) use ($search, $invitedClubId) {
+                    ->orWhereExists(function ($sub) use ($search, $targetClubId) {
                         $sub->select(DB::raw(1))
                             ->from('club_memberships')
                             ->whereColumn('club_memberships.player_id', 'users.id')
-                            ->where('club_memberships.club_id', $invitedClubId)
+                            ->where('club_memberships.club_id', $targetClubId)
                             ->where('club_memberships.membership_number', 'like', "%{$search}%");
                     });
             });
@@ -847,8 +1074,8 @@ class ClubService
         $paginator = $query->paginate($limit, ['*'], 'page', $page);
 
         // Map results to the required format
-        $data = collect($paginator->items())->map(function ($player) use ($invitedClubId) {
-            $membership = ClubMembership::where('club_id', $invitedClubId)
+        $data = collect($paginator->items())->map(function ($player) use ($targetClubId) {
+            $membership = ClubMembership::where('club_id', $targetClubId)
                 ->where('player_id', $player->id)
                 ->first();
 
@@ -884,8 +1111,25 @@ class ClubService
             $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
         }
 
-        // Verify that the authenticated club is the invited club
-        if ((int) $tournament->opponent_club_id !== $club->id) {
+        // Verify authorization: organizing club, opponent club, or in invitations
+        $isOrganizer = (int) $tournament->club_id === $club->id;
+        $isInvited = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('invited_club_id', $club->id)
+            ->where('status', 'accepted')
+            ->exists();
+
+        // Fallback for legacy single opponent: if no invitation record exists, check opponent_club_id
+        $isLegacyOpponent = false;
+        if (!$isInvited) {
+            $hasInvitationRecord = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+                ->where('invited_club_id', $club->id)
+                ->exists();
+            if (!$hasInvitationRecord && (int) $tournament->opponent_club_id === $club->id) {
+                $isLegacyOpponent = true;
+            }
+        }
+
+        if (!$isOrganizer && !$isInvited && !$isLegacyOpponent) {
             $this->apiError('You are not authorized to submit a team for this tournament.', 'FORBIDDEN', 403);
         }
 
@@ -900,18 +1144,66 @@ class ClubService
             $this->apiError('Selected roster size exceeds maximum players allowed.', 'CAPACITY_REACHED', 409);
         }
 
-        // Verify each player is eligible using the eligibility rules
-        $eligibleList = $this->eligiblePlayers($club, $tournamentId, 1, 1000);
-        $eligibleIds = collect($eligibleList['data'])->pluck('player_id')->toArray();
+        // Verify duplicate player IDs in request
+        if (count($playerIds) !== count(array_unique($playerIds))) {
+            $this->apiError('Duplicate player IDs are not allowed in the team roster.', 'DUPLICATE_PLAYERS', 422);
+        }
 
+        // Verify each player exists and is eligible
         foreach ($playerIds as $pid) {
-            if (!in_array((int) $pid, $eligibleIds, true)) {
+            $player = User::find($pid);
+            if (!$player) {
+                $this->apiError("Player ID {$pid} is not found.", 'PLAYER_NOT_FOUND', 422);
+            }
+            if (!$this->validatePlayerEligibility($player, $club, $tournament)) {
                 $this->apiError("Player ID {$pid} is not eligible for this tournament.", 'PLAYER_NOT_ELIGIBLE', 422);
             }
         }
 
         DB::transaction(function () use ($tournament, $club, $playerIds) {
-            // Save team roster to tournament_registrations
+            // Find or create TournamentTeam
+            $team = \App\Models\TournamentTeam::updateOrCreate(
+                [
+                    'tournament_id' => $tournament->id,
+                    'club_id' => $club->id,
+                ],
+                [
+                    'submission_status' => 'submitted',
+                    'submitted_at' => now(),
+                ]
+            );
+
+            // Delete old team players
+            \App\Models\TournamentTeamPlayer::where('team_id', $team->id)->delete();
+
+            // Insert new team players with sequence positions
+            foreach ($playerIds as $index => $pid) {
+                \App\Models\TournamentTeamPlayer::create([
+                    'team_id' => $team->id,
+                    'player_id' => $pid,
+                    'position' => $index + 1,
+                ]);
+            }
+
+            // Sync with legacy TournamentRegistration table:
+            // Find all current registrations for this tournament and players belonging to this club
+            $clubPlayerIds = User::where('role', 'player')
+                ->whereExists(function ($q) use ($club) {
+                    $q->select(DB::raw(1))
+                        ->from('club_memberships')
+                        ->whereColumn('club_memberships.player_id', 'users.id')
+                        ->where('club_memberships.club_id', $club->id);
+                })
+                ->pluck('id')
+                ->toArray();
+
+            // Delete legacy registrations for this club's players who are not in the new roster
+            TournamentRegistration::where('tournament_id', $tournament->id)
+                ->whereIn('player_id', $clubPlayerIds)
+                ->whereNotIn('player_id', $playerIds)
+                ->delete();
+
+            // Insert or update legacy registrations for the new roster
             foreach ($playerIds as $pid) {
                 TournamentRegistration::updateOrCreate(
                     [
@@ -943,7 +1235,7 @@ class ClubService
                 action: 'submit_tournament_team',
                 entityType: Tournament::class,
                 entityId: $tournament->id,
-                before: ['status' => 'soft_accepted'],
+                before: null,
                 after: [
                     'status' => 'confirmed',
                     'player_ids' => $playerIds,
@@ -952,7 +1244,7 @@ class ClubService
 
             // Notify organizer club
             $organizer = $tournament->club;
-            if ($organizer) {
+            if ($organizer && (int)$organizer->id !== $club->id) {
                 $organizer->notify(new TournamentTeamSubmittedNotification($tournament));
             }
         });
@@ -967,22 +1259,27 @@ class ClubService
             $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
         }
 
-        // Verify that the authenticated club is either the creator or the opponent
-        if ((int) $tournament->club_id !== $club->id && (int) $tournament->opponent_club_id !== $club->id) {
+        // Verify authorization: organizing club, opponent club, or in invitations
+        $isOrganizer = (int) $tournament->club_id === $club->id;
+        $isInvited = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('invited_club_id', $club->id)
+            ->exists();
+
+        if (!$isOrganizer && !$isInvited && (int) $tournament->opponent_club_id !== $club->id) {
             $this->apiError('You are not authorized to view the team roster for this tournament.', 'FORBIDDEN', 403);
         }
 
+        // 1. Build legacy flat array of players (from tournament_registrations)
         $registrations = TournamentRegistration::where('tournament_id', $tournament->id)
             ->with(['player'])
             ->get();
 
-        return $registrations->map(function ($reg) use ($tournament) {
+        $legacyFlatPlayers = $registrations->map(function ($reg) use ($tournament) {
             $player = $reg->player;
             if (!$player) {
                 return null;
             }
 
-            // Find membership relative to the opponent club if set, otherwise creator club
             $targetClubId = $tournament->opponent_club_id ?? $tournament->club_id;
             $membership = ClubMembership::where('club_id', $targetClubId)
                 ->where('player_id', $player->id)
@@ -1003,6 +1300,186 @@ class ClubService
                 'currency' => $reg->currency,
             ];
         })->filter()->values()->toArray();
+
+        // 2. Build the new day-wise/grouped teams array
+        $teamsGrouped = [];
+
+        // Add Host Club Team
+        $hostClub = $tournament->club;
+        if ($hostClub) {
+            $hostTeam = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)
+                ->where('club_id', $hostClub->id)
+                ->first();
+
+            $hostPlayers = [];
+            if ($hostTeam) {
+                $teamPlayers = \App\Models\TournamentTeamPlayer::where('team_id', $hostTeam->id)
+                    ->with('player')
+                    ->orderBy('position', 'asc')
+                    ->get();
+
+                foreach ($teamPlayers as $tp) {
+                    if ($tp->player) {
+                        $membership = ClubMembership::where('club_id', $hostClub->id)
+                            ->where('player_id', $tp->player->id)
+                            ->first();
+
+                        $hostPlayers[] = [
+                            'player_id' => $tp->player->id,
+                            'full_name' => $tp->player->name,
+                            'profile_image' => $tp->player->profile_image ? asset('storage/' . $tp->player->profile_image) : null,
+                            'membership_number' => $membership?->membership_number,
+                            'gender' => $tp->player->gender,
+                            'age' => $tp->player->dob ? $tp->player->dob->age : null,
+                            'level' => $tp->player->playing_level,
+                            'position' => $tp->position,
+                        ];
+                    }
+                }
+            }
+
+            $teamsGrouped[] = [
+                'club_id' => $hostClub->id,
+                'club_name' => $hostClub->club_name ?? $hostClub->name,
+                'invitation_status' => 'host',
+                'team_status' => !empty($hostPlayers) ? 'submitted' : 'not_submitted',
+                'players' => $hostPlayers,
+            ];
+        }
+
+        // Get invited clubs
+        $invitations = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->with('invitedClub')
+            ->get();
+
+        $invitedClubIds = [];
+        foreach ($invitations as $inv) {
+            $invitedClub = $inv->invitedClub;
+            if (!$invitedClub) continue;
+            $invitedClubIds[] = $invitedClub->id;
+
+            $oppTeam = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)
+                ->where('club_id', $invitedClub->id)
+                ->first();
+
+            $oppPlayers = [];
+            if ($oppTeam) {
+                $teamPlayers = \App\Models\TournamentTeamPlayer::where('team_id', $oppTeam->id)
+                    ->with('player')
+                    ->orderBy('position', 'asc')
+                    ->get();
+
+                foreach ($teamPlayers as $tp) {
+                    if ($tp->player) {
+                        $membership = ClubMembership::where('club_id', $invitedClub->id)
+                            ->where('player_id', $tp->player->id)
+                            ->first();
+
+                        $oppPlayers[] = [
+                            'player_id' => $tp->player->id,
+                            'full_name' => $tp->player->name,
+                            'profile_image' => $tp->player->profile_image ? asset('storage/' . $tp->player->profile_image) : null,
+                            'membership_number' => $membership?->membership_number,
+                            'gender' => $tp->player->gender,
+                            'age' => $tp->player->dob ? $tp->player->dob->age : null,
+                            'level' => $tp->player->playing_level,
+                            'position' => $tp->position,
+                        ];
+                    }
+                }
+            }
+
+            $teamsGrouped[] = [
+                'club_id' => $invitedClub->id,
+                'club_name' => $invitedClub->club_name ?? $invitedClub->name,
+                'invitation_status' => $inv->status,
+                'team_status' => !empty($oppPlayers) ? 'submitted' : 'not_submitted',
+                'players' => $oppPlayers,
+            ];
+        }
+
+        // Support legacy opponent_club_id if not already in invitations
+        if ($tournament->opponent_club_id && !in_array((int)$tournament->opponent_club_id, $invitedClubIds, true)) {
+            $oppClub = User::find($tournament->opponent_club_id);
+            if ($oppClub) {
+                $oppTeam = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)
+                    ->where('club_id', $oppClub->id)
+                    ->first();
+
+                $oppPlayers = [];
+                if ($oppTeam) {
+                    $teamPlayers = \App\Models\TournamentTeamPlayer::where('team_id', $oppTeam->id)
+                        ->with('player')
+                        ->orderBy('position', 'asc')
+                        ->get();
+
+                    foreach ($teamPlayers as $tp) {
+                        if ($tp->player) {
+                            $membership = ClubMembership::where('club_id', $oppClub->id)
+                                ->where('player_id', $tp->player->id)
+                                ->first();
+
+                            $oppPlayers[] = [
+                                'player_id' => $tp->player->id,
+                                'full_name' => $tp->player->name,
+                                'profile_image' => $tp->player->profile_image ? asset('storage/' . $tp->player->profile_image) : null,
+                                'membership_number' => $membership?->membership_number,
+                                'gender' => $tp->player->gender,
+                                'age' => $tp->player->dob ? $tp->player->dob->age : null,
+                                'level' => $tp->player->playing_level,
+                                'position' => $tp->position,
+                            ];
+                        }
+                    }
+                } else {
+                    $oppRegs = TournamentRegistration::where('tournament_id', $tournament->id)
+                        ->whereHas('player', function($q) use ($oppClub) {
+                            $q->whereExists(function($sub) use ($oppClub) {
+                                $sub->select(DB::raw(1))
+                                    ->from('club_memberships')
+                                    ->whereColumn('club_memberships.player_id', 'users.id')
+                                    ->where('club_memberships.club_id', $oppClub->id)
+                                    ->where('club_memberships.status', 'approved');
+                            });
+                        })
+                        ->with(['player'])
+                        ->get();
+
+                    foreach ($oppRegs as $index => $reg) {
+                        if ($reg->player) {
+                            $membership = ClubMembership::where('club_id', $oppClub->id)
+                                ->where('player_id', $reg->player->id)
+                                ->first();
+
+                            $oppPlayers[] = [
+                                'player_id' => $reg->player->id,
+                                'full_name' => $reg->player->name,
+                                'profile_image' => $reg->player->profile_image ? asset('storage/' . $reg->player->profile_image) : null,
+                                'membership_number' => $membership?->membership_number,
+                                'gender' => $reg->player->gender,
+                                'age' => $reg->player->dob ? $reg->player->dob->age : null,
+                                'level' => $reg->player->playing_level,
+                                'position' => $index + 1,
+                            ];
+                        }
+                    }
+                }
+
+                $invStatus = $tournament->status === 'confirmed' ? 'accepted' : 'pending';
+                $teamsGrouped[] = [
+                    'club_id' => $oppClub->id,
+                    'club_name' => $oppClub->club_name ?? $oppClub->name,
+                    'invitation_status' => $invStatus,
+                    'team_status' => !empty($oppPlayers) ? 'submitted' : 'not_submitted',
+                    'players' => $oppPlayers,
+                ];
+            }
+        }
+
+        return [
+            'legacy_flat' => $legacyFlatPlayers,
+            'teams_grouped' => $teamsGrouped
+        ];
     }
 
     public function acceptRegistration(User $club, int $tournamentId, int $registrationId): TournamentRegistration
