@@ -23,11 +23,14 @@ class ClubMembership extends Model
         'approved_at',
         'removed_at',
         'removal_reason',
+        'membership_type',
+        'membership_expiry_date',
     ];
 
     protected $casts = [
         'approved_at' => 'datetime',
         'removed_at' => 'datetime',
+        'membership_expiry_date' => 'datetime',
     ];
 
     public function club(): BelongsTo

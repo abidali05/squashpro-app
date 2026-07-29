@@ -359,7 +359,7 @@ class ClubController extends Controller
 
     public function getTournamentTeam(Request $request, string $tournament_id): JsonResponse
     {
-        $data = $this->clubService->getTournamentTeam(
+        $res = $this->clubService->getTournamentTeam(
             $request->user(),
             $tournament_id
         );
@@ -367,7 +367,8 @@ class ClubController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Tournament team roster retrieved successfully.',
-            'data' => $data,
+            'data' => $res['legacy_flat'],
+            'teams' => $res['teams_grouped'],
         ]);
     }
 

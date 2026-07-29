@@ -99,6 +99,30 @@ class ClubMembershipController extends Controller
             ], 404);
         }
 
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'membership_type' => ['nullable', 'string', 'in:temporary,permanent'],
+            'membership_expiry_date' => [
+                \Illuminate\Validation\Rule::requiredIf(fn () => $request->input('membership_type') === 'temporary'),
+                'nullable',
+                'date',
+                'after:today',
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error.',
+                'error_code' => ApiErrorCode::VALIDATION_ERROR,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $membershipType = $request->input('membership_type', 'temporary');
+        $expiryDate = $membershipType === 'temporary' && $request->filled('membership_expiry_date')
+            ? \Illuminate\Support\Carbon::parse($request->input('membership_expiry_date'))
+            : null;
+
         // Idempotency check
         if ($membershipRequest->status === ClubMembershipRequest::STATUS_APPROVED) {
             $existingMembership = ClubMembership::where('club_id', $club->id)
@@ -132,6 +156,8 @@ class ClubMembershipController extends Controller
                     'membership_number' => $membershipRequest->membership_number,
                     'status' => ClubMembership::STATUS_APPROVED,
                     'approved_at' => now(),
+                    'membership_type' => $membershipType,
+                    'membership_expiry_date' => $expiryDate,
                 ]
             );
 
@@ -518,6 +544,8 @@ class ClubMembershipController extends Controller
                 'verification_mode' => $membership->verification_mode,
                 'status' => $membership->status,
                 'approved_at' => $membership->approved_at?->toIso8601String(),
+                'membership_type' => $membership->membership_type ?? 'temporary',
+                'membership_expiry_date' => $membership->membership_expiry_date?->toIso8601String(),
                 'removed_at' => $membership->removed_at?->toIso8601String(),
                 'booking_eligible' => ($membership->status === 'approved' && $player->status === 'active'),
                 'status_history' => $statusHistory,

@@ -202,4 +202,40 @@ class ClubMemberManagementTest extends TestCase
             ->assertJsonPath('data.player.full_name', 'Babar Azam')
             ->assertJsonPath('data.player.playing_level', 'advanced');
     }
+
+    public function test_club_members_list_and_details_expose_membership_type(): void
+    {
+        $player = User::factory()->create(['role' => 'player', 'status' => 'active', 'name' => 'Imad Wasim']);
+
+        $expiry = now()->addDays(60)->startOfDay();
+        $membership = ClubMembership::create([
+            'club_id' => $this->club->id,
+            'player_id' => $player->id,
+            'membership_number' => 'CSC-300',
+            'status' => 'approved',
+            'approved_at' => now(),
+            'membership_type' => 'temporary',
+            'membership_expiry_date' => $expiry,
+        ]);
+
+        // 1. Assert they appear in index list response
+        $responseIndex = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->getJson('/api/v1/club/members');
+
+        $responseIndex->assertOk();
+        $members = $responseIndex->json('data');
+        $imadMember = collect($members)->firstWhere('membership_number', 'CSC-300');
+
+        $this->assertNotNull($imadMember);
+        $this->assertEquals('temporary', $imadMember['membership_type']);
+        $this->assertEquals($expiry->toIso8601String(), $imadMember['membership_expiry_date']);
+
+        // 2. Assert they appear in show details response
+        $responseDetail = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->getJson("/api/v1/club/members/{$membership->id}");
+
+        $responseDetail->assertOk()
+            ->assertJsonPath('data.membership_type', 'temporary')
+            ->assertJsonPath('data.membership_expiry_date', $expiry->toIso8601String());
+    }
 }

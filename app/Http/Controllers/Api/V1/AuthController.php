@@ -64,6 +64,8 @@ class AuthController extends Controller
                 'string',
                 'max:255',
             ],
+            'are_you_scorer' => ['nullable', 'boolean'],
+            'are_you_umpire' => ['nullable', 'boolean'],
         ]);
 
         if ($validator->fails()) {
@@ -80,6 +82,8 @@ class AuthController extends Controller
                 'role' => 'player',
                 'status' => 'otp_pending',
                 'otp_verified' => false,
+                'are_you_scorer' => $request->boolean('are_you_scorer'),
+                'are_you_umpire' => $request->boolean('are_you_umpire'),
             ]);
 
             $plainAccessToken = bin2hex(random_bytes(32));
@@ -153,82 +157,269 @@ class AuthController extends Controller
             );
         }
 
-        $validator = Validator::make($request->all(), [
-            'club_name' => ['required', 'string', 'max:255'],
-            'owner_manager_name' => ['required', 'string', 'max:255'],
-            'email' => [...ApiValidationRules::email(), 'max:255'],
-            'phone' => ApiValidationRules::phone(),
-            'address' => ['required', 'string', 'max:255'],
-            'city' => ['required', 'string', 'max:100'],
-            'number_of_courts' => ApiValidationRules::numberOfCourts(),
-            'working_hours' => ['required', 'string', 'max:100'],
-            'password' => ['required', Password::min(8)],
-            'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
-            'facilities' => ['nullable', 'array'],
-            'facilities.*' => ['string', 'max:255'],
-            
-            // Booking policy fields
-            'non_member_booking' => ['nullable', 'array'],
-            'non_member_booking.allowed' => ['required_with:non_member_booking', 'boolean'],
-            'non_member_booking.start_time' => [
-                'required_if:non_member_booking.allowed,true,1',
-                'nullable',
-                'date_format:H:i',
-            ],
-            'non_member_booking.end_time' => [
-                'required_if:non_member_booking.allowed,true,1',
-                'nullable',
-                'date_format:H:i',
-                'after:non_member_booking.start_time',
-            ],
-            'non_member_booking.timezone' => [
-                'required_if:non_member_booking.allowed,true,1',
-                'nullable',
-                'string',
-                'timezone',
-            ],
-            
-            // Initial player IDs
-            'initial_player_ids' => ['nullable', 'array'],
-            'initial_player_ids.*' => [
-                'integer',
-                'distinct',
-                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
-                    $query->where('role', 'player');
-                }),
-            ],
-            'members' => ['nullable', 'array'],
-            'members.*.player_id' => [
-                'required_with:members',
-                'integer',
-                'distinct',
-                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
-                    $query->where('role', 'player');
-                }),
-            ],
-            'members.*.membership_number' => [
-                'required_with:members',
-                'string',
-                'distinct',
-                'max:255',
-            ],
-        ]);
+        $isLegacy = is_string($request->input('working_hours'));
 
-        // Custom validation check: if allowed is false, start_time/end_time/timezone must be null
-        $validator->after(function ($validator) use ($request) {
-            $allowed = $request->input('non_member_booking.allowed');
-            if ($allowed !== null && !filter_var($allowed, FILTER_VALIDATE_BOOLEAN)) {
-                if ($request->filled('non_member_booking.start_time')) {
-                    $validator->errors()->add('non_member_booking.start_time', 'The start time must be null when non-member booking is not allowed.');
+        if ($isLegacy) {
+            $rules = [
+                'club_name' => ['required', 'string', 'max:255'],
+                'owner_manager_name' => ['required', 'string', 'max:255'],
+                'email' => [...ApiValidationRules::email(), 'max:255'],
+                'phone' => ApiValidationRules::phone(),
+                'address' => ['required', 'string', 'max:255'],
+                'city' => ['required', 'string', 'max:100'],
+                'number_of_courts' => ApiValidationRules::numberOfCourts(),
+                'working_hours' => ['required', 'string', 'max:100'],
+                'password' => ['required', Password::min(8)],
+                'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
+                'facilities' => ['nullable', 'array'],
+                'facilities.*' => ['string', 'max:255'],
+                
+                // Booking policy fields
+                'non_member_booking' => ['nullable', 'array'],
+                'non_member_booking.allowed' => ['required_with:non_member_booking', 'boolean'],
+                'non_member_booking.start_time' => [
+                    'required_if:non_member_booking.allowed,true,1',
+                    'nullable',
+                    'date_format:H:i',
+                ],
+                'non_member_booking.end_time' => [
+                    'required_if:non_member_booking.allowed,true,1',
+                    'nullable',
+                    'date_format:H:i',
+                    'after:non_member_booking.start_time',
+                ],
+                'non_member_booking.timezone' => [
+                    'required_if:non_member_booking.allowed,true,1',
+                    'nullable',
+                    'string',
+                    'timezone',
+                ],
+                
+                // Initial player IDs
+                'initial_player_ids' => ['nullable', 'array'],
+                'initial_player_ids.*' => [
+                    'integer',
+                    'distinct',
+                    \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                        $query->where('role', 'player');
+                    }),
+                ],
+                'members' => ['nullable', 'array'],
+                'members.*.player_id' => [
+                    'required_with:members',
+                    'integer',
+                    'distinct',
+                    \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                        $query->where('role', 'player');
+                    }),
+                ],
+                'members.*.membership_number' => [
+                    'required_with:members',
+                    'string',
+                    'distinct',
+                    'max:255',
+                ],
+            ];
+            
+            $validator = Validator::make($request->all(), $rules);
+            
+            $validator->after(function ($validator) use ($request) {
+                $allowed = $request->input('non_member_booking.allowed');
+                if ($allowed !== null && !filter_var($allowed, FILTER_VALIDATE_BOOLEAN)) {
+                    if ($request->filled('non_member_booking.start_time')) {
+                        $validator->errors()->add('non_member_booking.start_time', 'The start time must be null when non-member booking is not allowed.');
+                    }
+                    if ($request->filled('non_member_booking.end_time')) {
+                        $validator->errors()->add('non_member_booking.end_time', 'The end time must be null when non-member booking is not allowed.');
+                    }
+                    if ($request->filled('non_member_booking.timezone')) {
+                        $validator->errors()->add('non_member_booking.timezone', 'The timezone must be null when non-member booking is not allowed.');
+                    }
                 }
-                if ($request->filled('non_member_booking.end_time')) {
-                    $validator->errors()->add('non_member_booking.end_time', 'The end time must be null when non-member booking is not allowed.');
+            });
+        } else {
+            $rules = [
+                'club_name' => ['required', 'string', 'max:255'],
+                'owner_manager_name' => ['required', 'string', 'max:255'],
+                'email' => [...ApiValidationRules::email(), 'max:255'],
+                'phone' => ApiValidationRules::phone(),
+                'address' => ['required', 'string', 'max:255'],
+                'city' => ['required', 'string', 'max:100'],
+                'number_of_courts' => ApiValidationRules::numberOfCourts(),
+                'password' => ['required', Password::min(8)],
+                'club_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp'],
+                'facilities' => ['nullable', 'array'],
+                'facilities.*' => ['string', 'max:255'],
+                'timezone' => ['required', 'string', 'timezone'],
+
+                // New Day-wise club working hours
+                'working_hours' => ['required', 'array', 'min:7', 'max:7'],
+                'working_hours.*.day' => ['required', 'string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'],
+                'working_hours.*.is_open' => ['required', 'boolean'],
+                'working_hours.*.opens_at' => ['required_if:working_hours.*.is_open,true,1', 'nullable', 'date_format:H:i'],
+                'working_hours.*.closes_at' => ['required_if:working_hours.*.is_open,true,1', 'nullable', 'date_format:H:i'],
+
+                // New Non-member booking fields
+                'allow_non_member_booking' => ['required', 'boolean'],
+                'non_member_booking_schedule' => ['required_if:allow_non_member_booking,true,1', 'nullable', 'array', 'min:7', 'max:7'],
+                'non_member_booking_schedule.*.day' => ['required_with:non_member_booking_schedule', 'string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'],
+                'non_member_booking_schedule.*.is_available' => ['required_with:non_member_booking_schedule', 'boolean'],
+                'non_member_booking_schedule.*.time_ranges' => ['required_if:non_member_booking_schedule.*.is_available,true,1', 'nullable', 'array'],
+                'non_member_booking_schedule.*.time_ranges.*.from' => ['required_with:non_member_booking_schedule.*.time_ranges', 'date_format:H:i'],
+                'non_member_booking_schedule.*.time_ranges.*.to' => ['required_with:non_member_booking_schedule.*.time_ranges', 'date_format:H:i'],
+
+                // Initial player IDs
+                'initial_player_ids' => ['nullable', 'array'],
+                'initial_player_ids.*' => [
+                    'integer',
+                    'distinct',
+                    \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                        $query->where('role', 'player');
+                    }),
+                ],
+                'members' => ['nullable', 'array'],
+                'members.*.player_id' => [
+                    'required_with:members',
+                    'integer',
+                    'distinct',
+                    \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($query) {
+                        $query->where('role', 'player');
+                    }),
+                ],
+                'members.*.membership_number' => [
+                    'required_with:members',
+                    'string',
+                    'distinct',
+                    'max:255',
+                ],
+            ];
+
+            $validator = Validator::make($request->all(), $rules);
+
+            $validator->after(function ($validator) use ($request) {
+                $workingHours = $request->input('working_hours');
+                $allowNonMember = filter_var($request->input('allow_non_member_booking', false), FILTER_VALIDATE_BOOLEAN);
+                $nonMemberSchedule = $request->input('non_member_booking_schedule');
+
+                if (!is_array($workingHours)) {
+                    return;
                 }
-                if ($request->filled('non_member_booking.timezone')) {
-                    $validator->errors()->add('non_member_booking.timezone', 'The timezone must be null when non-member booking is not allowed.');
+
+                // 1. One record per day for working hours
+                $workingDays = [];
+                $workingHoursMap = [];
+                foreach ($workingHours as $index => $wh) {
+                    if (!isset($wh['day'])) continue;
+                    $day = strtolower($wh['day']);
+                    if (in_array($day, $workingDays, true)) {
+                        $validator->errors()->add("working_hours.{$index}.day", "Duplicate working hours entry for day: {$day}.");
+                    }
+                    $workingDays[] = $day;
+                    $workingHoursMap[$day] = $wh;
+
+                    // Working-hour order: opens_at must be earlier than closes_at
+                    $isOpen = filter_var($wh['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    if ($isOpen) {
+                        $opensAt = $wh['opens_at'] ?? null;
+                        $closesAt = $wh['closes_at'] ?? null;
+                        if ($opensAt && $closesAt) {
+                            try {
+                                $opVal = \Illuminate\Support\Carbon::createFromFormat('H:i', $opensAt);
+                                $clVal = \Illuminate\Support\Carbon::createFromFormat('H:i', $closesAt);
+                                if ($opVal->greaterThanOrEqualTo($clVal)) {
+                                    $validator->errors()->add("working_hours.{$index}.opens_at", "The opening time must be earlier than closing time.");
+                                }
+                            } catch (\Exception $e) {
+                                // Handled by date_format rule
+                            }
+                        }
+                    }
                 }
-            }
-        });
+
+                // Validate non-member booking schedule if enabled
+                if ($allowNonMember) {
+                    if (!is_array($nonMemberSchedule)) {
+                        $validator->errors()->add('non_member_booking_schedule', 'The non-member booking schedule is required when non-member booking is allowed.');
+                        return;
+                    }
+
+                    $nonMemberDays = [];
+                    foreach ($nonMemberSchedule as $index => $nms) {
+                        if (!isset($nms['day'])) continue;
+                        $day = strtolower($nms['day']);
+                        if (in_array($day, $nonMemberDays, true)) {
+                            $validator->errors()->add("non_member_booking_schedule.{$index}.day", "Duplicate non-member booking schedule entry for day: {$day}.");
+                        }
+                        $nonMemberDays[] = $day;
+
+                        $isAvailable = filter_var($nms['is_available'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                        $timeRanges = $nms['time_ranges'] ?? [];
+
+                        // Closed-day rule: A closed club day cannot contain non-member booking ranges
+                        $clubDayConfig = $workingHoursMap[$day] ?? null;
+                        $isClubOpen = $clubDayConfig ? filter_var($clubDayConfig['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN) : false;
+
+                        if (!$isClubOpen) {
+                            if ($isAvailable || !empty($timeRanges)) {
+                                $validator->errors()->add("non_member_booking_schedule.{$index}.is_available", "A closed club day ({$day}) cannot contain non-member booking ranges.");
+                            }
+                            continue;
+                        }
+
+                        if ($isAvailable && is_array($timeRanges)) {
+                            $sortedRanges = [];
+                            foreach ($timeRanges as $rIdx => $range) {
+                                $from = $range['from'] ?? null;
+                                $to = $range['to'] ?? null;
+                                if (!$from || !$to) continue;
+
+                                try {
+                                    $fromTime = \Illuminate\Support\Carbon::createFromFormat('H:i', $from);
+                                    $toTime = \Illuminate\Support\Carbon::createFromFormat('H:i', $to);
+
+                                    // Non-member range order: Each from value must be earlier than its corresponding to value
+                                    if ($fromTime->greaterThanOrEqualTo($toTime)) {
+                                        $validator->errors()->add("non_member_booking_schedule.{$index}.time_ranges.{$rIdx}.from", "The from time must be earlier than the to time.");
+                                        continue;
+                                    }
+
+                                    // Within club hours: Every non-member time range must fall completely inside the club working hours for that day
+                                    if (isset($clubDayConfig['opens_at']) && isset($clubDayConfig['closes_at'])) {
+                                        $clubOpensAt = \Illuminate\Support\Carbon::createFromFormat('H:i', $clubDayConfig['opens_at']);
+                                        $clubClosesAt = \Illuminate\Support\Carbon::createFromFormat('H:i', $clubDayConfig['closes_at']);
+
+                                        if ($fromTime->lessThan($clubOpensAt) || $toTime->greaterThan($clubClosesAt)) {
+                                            $validator->errors()->add("non_member_booking_schedule.{$index}.time_ranges.{$rIdx}.from", "The non-member booking window must fall completely within club working hours ({$clubDayConfig['opens_at']} - {$clubDayConfig['closes_at']}).");
+                                        }
+                                    }
+
+                                    $sortedRanges[] = [
+                                        'from' => $fromTime,
+                                        'to' => $toTime,
+                                        'rIdx' => $rIdx
+                                    ];
+                                } catch (\Exception $e) {
+                                    // Handled by validation format rules
+                                }
+                            }
+
+                            // No overlapping ranges: Multiple non-member ranges on the same day must not overlap
+                            usort($sortedRanges, function ($a, $b) {
+                                return $a['from'] <=> $b['from'];
+                            });
+
+                            for ($i = 0; $i < count($sortedRanges) - 1; $i++) {
+                                $current = $sortedRanges[$i];
+                                $next = $sortedRanges[$i + 1];
+                                if ($current['to']->greaterThan($next['from'])) {
+                                    $validator->errors()->add("non_member_booking_schedule.{$index}.time_ranges.{$next['rIdx']}.from", "Non-member booking time ranges must not overlap.");
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         if ($validator->fails()) {
             return $this->validationError($validator->errors()->toArray());
@@ -239,33 +430,169 @@ class AuthController extends Controller
             $logoPath = $request->file('club_logo')->store('club-logos', 'public');
         }
 
-        $allowed = filter_var($request->input('non_member_booking.allowed', false), FILTER_VALIDATE_BOOLEAN);
-
         DB::beginTransaction();
         try {
-            $user = User::create([
-                'name' => $request->string('owner_manager_name')->toString(),
-                'email' => $email,
-                'phone' => $phone,
-                'password' => Hash::make($request->string('password')->toString()),
-                'role' => 'club',
-                'status' => 'otp_pending',
-                'otp_verified' => false,
-                'club_name' => $request->string('club_name')->toString(),
-                'owner_manager_name' => $request->string('owner_manager_name')->toString(),
-                'address' => $request->string('address')->toString(),
-                'city' => $request->string('city')->toString(),
-                'number_of_courts' => $request->integer('number_of_courts'),
-                'working_hours' => $request->string('working_hours')->toString(),
-                'club_logo' => $logoPath,
-                'facilities' => $request->input('facilities', []),
-                
-                // Save booking policy fields
-                'non_member_booking_allowed' => $allowed,
-                'non_member_booking_start_time' => $allowed ? $request->input('non_member_booking.start_time') : null,
-                'non_member_booking_end_time' => $allowed ? $request->input('non_member_booking.end_time') : null,
-                'timezone' => $allowed ? $request->input('non_member_booking.timezone') : null,
-            ]);
+            if ($isLegacy) {
+                $allowed = filter_var($request->input('non_member_booking.allowed', false), FILTER_VALIDATE_BOOLEAN);
+                $workingHoursString = $request->string('working_hours')->toString();
+                $timezone = $allowed ? $request->input('non_member_booking.timezone') : null;
+
+                $user = User::create([
+                    'name' => $request->string('owner_manager_name')->toString(),
+                    'email' => $email,
+                    'phone' => $phone,
+                    'password' => Hash::make($request->string('password')->toString()),
+                    'role' => 'club',
+                    'status' => 'otp_pending',
+                    'otp_verified' => false,
+                    'club_name' => $request->string('club_name')->toString(),
+                    'owner_manager_name' => $request->string('owner_manager_name')->toString(),
+                    'address' => $request->string('address')->toString(),
+                    'city' => $request->string('city')->toString(),
+                    'number_of_courts' => $request->integer('number_of_courts'),
+                    'working_hours' => $workingHoursString,
+                    'club_logo' => $logoPath,
+                    'facilities' => $request->input('facilities', []),
+                    
+                    // Save booking policy fields
+                    'non_member_booking_allowed' => $allowed,
+                    'non_member_booking_start_time' => $allowed ? $request->input('non_member_booking.start_time') : null,
+                    'non_member_booking_end_time' => $allowed ? $request->input('non_member_booking.end_time') : null,
+                    'timezone' => $timezone,
+                ]);
+
+                // Create day-wise working hours schedule automatically
+                // Parse working hours string to get times
+                $start = '08:00';
+                $end = '23:00';
+                if ($workingHoursString && preg_match('/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/', $workingHoursString, $matches)) {
+                    $start = $matches[1];
+                    $end = $matches[2];
+                }
+
+                $daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                foreach ($daysOfWeek as $d) {
+                    \App\Models\ClubWorkingHour::create([
+                        'club_id' => $user->id,
+                        'day' => $d,
+                        'is_open' => true,
+                        'opens_at' => $start,
+                        'closes_at' => $end,
+                    ]);
+                }
+
+                // Create non-member windows
+                foreach ($daysOfWeek as $d) {
+                    \App\Models\ClubNonMemberWindow::create([
+                        'club_id' => $user->id,
+                        'day' => $d,
+                        'is_available' => $allowed,
+                        'from_time' => $allowed ? $request->input('non_member_booking.start_time') : null,
+                        'to_time' => $allowed ? $request->input('non_member_booking.end_time') : null,
+                    ]);
+                }
+            } else {
+                $allowed = filter_var($request->input('allow_non_member_booking', false), FILTER_VALIDATE_BOOLEAN);
+                $timezone = $request->input('timezone');
+
+                // Determine default working_hours string from the first open day for legacy code compatibility
+                $workingHoursArray = $request->input('working_hours');
+                $firstOpenDay = collect($workingHoursArray)->first(function ($wh) {
+                    return filter_var($wh['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                });
+                $workingHoursString = $firstOpenDay 
+                    ? "{$firstOpenDay['opens_at']} - {$firstOpenDay['closes_at']}" 
+                    : "08:00 - 23:00";
+
+                // Save non_member_booking_start_time and non_member_booking_end_time from the first available day's first window (for legacy compatibility)
+                $legacyStartTime = null;
+                $legacyEndTime = null;
+                if ($allowed && is_array($request->input('non_member_booking_schedule'))) {
+                    $firstAvailDay = collect($request->input('non_member_booking_schedule'))->first(function ($nms) {
+                        return filter_var($nms['is_available'] ?? false, FILTER_VALIDATE_BOOLEAN) && !empty($nms['time_ranges']);
+                    });
+                    if ($firstAvailDay && isset($firstAvailDay['time_ranges'][0])) {
+                        $legacyStartTime = $firstAvailDay['time_ranges'][0]['from'];
+                        $legacyEndTime = $firstAvailDay['time_ranges'][0]['to'];
+                    }
+                }
+
+                $user = User::create([
+                    'name' => $request->string('owner_manager_name')->toString(),
+                    'email' => $email,
+                    'phone' => $phone,
+                    'password' => Hash::make($request->string('password')->toString()),
+                    'role' => 'club',
+                    'status' => 'otp_pending',
+                    'otp_verified' => false,
+                    'club_name' => $request->string('club_name')->toString(),
+                    'owner_manager_name' => $request->string('owner_manager_name')->toString(),
+                    'address' => $request->string('address')->toString(),
+                    'city' => $request->string('city')->toString(),
+                    'number_of_courts' => $request->integer('number_of_courts'),
+                    'working_hours' => $workingHoursString,
+                    'club_logo' => $logoPath,
+                    'facilities' => $request->input('facilities', []),
+                    
+                    // Save booking policy fields
+                    'non_member_booking_allowed' => $allowed,
+                    'non_member_booking_start_time' => $legacyStartTime,
+                    'non_member_booking_end_time' => $legacyEndTime,
+                    'timezone' => $timezone,
+                ]);
+
+                // Create day-wise working hours schedule
+                foreach ($workingHoursArray as $wh) {
+                    \App\Models\ClubWorkingHour::create([
+                        'club_id' => $user->id,
+                        'day' => strtolower($wh['day']),
+                        'is_open' => filter_var($wh['is_open'], FILTER_VALIDATE_BOOLEAN),
+                        'opens_at' => $wh['opens_at'] ?? null,
+                        'closes_at' => $wh['closes_at'] ?? null,
+                    ]);
+                }
+
+                // Create non-member windows
+                if ($allowed && is_array($request->input('non_member_booking_schedule'))) {
+                    foreach ($request->input('non_member_booking_schedule') as $nms) {
+                        $day = strtolower($nms['day']);
+                        $isAvail = filter_var($nms['is_available'], FILTER_VALIDATE_BOOLEAN);
+                        $timeRanges = $nms['time_ranges'] ?? [];
+
+                        if ($isAvail && is_array($timeRanges) && !empty($timeRanges)) {
+                            foreach ($timeRanges as $range) {
+                                \App\Models\ClubNonMemberWindow::create([
+                                    'club_id' => $user->id,
+                                    'day' => $day,
+                                    'is_available' => true,
+                                    'from_time' => $range['from'],
+                                    'to_time' => $range['to'],
+                                ]);
+                            }
+                        } else {
+                            \App\Models\ClubNonMemberWindow::create([
+                                'club_id' => $user->id,
+                                'day' => $day,
+                                'is_available' => false,
+                                'from_time' => null,
+                                'to_time' => null,
+                            ]);
+                        }
+                    }
+                } else {
+                    // Seed empty/unavailable windows for all days
+                    $daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                    foreach ($daysOfWeek as $d) {
+                        \App\Models\ClubNonMemberWindow::create([
+                            'club_id' => $user->id,
+                            'day' => $d,
+                            'is_available' => false,
+                            'from_time' => null,
+                            'to_time' => null,
+                        ]);
+                    }
+                }
+            }
 
             $this->assignRoleIfPresent($user, 'club');
             $this->createOtp($user->email, 'registration');

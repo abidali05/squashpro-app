@@ -735,4 +735,116 @@ class TournamentModuleFullFlowTest extends TestCase
         $tournament->refresh();
         $this->assertEquals(1, $tournament->registered_players_count);
     }
+
+    public function test_invited_club_team_roster_submission_with_sequence(): void
+    {
+        // 1. Create a club-to-club tournament organizing by club1, inviting club2
+        $tournament = Tournament::create([
+            'club_id' => $this->club1->id,
+            'name' => 'Challenge Cup Roster Test',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'opponent_club_id' => $this->club2->id,
+            'gender' => 'MALE',
+            'player_level' => ['ADVANCED'],
+            'age_group' => '15-25',
+            'maximum_players' => 10,
+            'status' => 'pending',
+        ]);
+
+        // Create the invitation record (accepted status so they can submit team)
+        \App\Models\TournamentInvitation::create([
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->club2->id,
+            'status' => 'accepted',
+            'invited_at' => now(),
+            'responded_at' => now(),
+        ]);
+
+        // Create two eligible players for club2 (opponent)
+        $playerA = User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+            'gender' => 'MALE',
+            'playing_level' => 'ADVANCED',
+            'dob' => '2004-03-10', // Age 22
+        ]);
+        $playerB = User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+            'gender' => 'MALE',
+            'playing_level' => 'ADVANCED',
+            'dob' => '2005-05-15', // Age 21
+        ]);
+
+        // Add them as approved members to club2
+        ClubMembership::create([
+            'club_id' => $this->club2->id,
+            'player_id' => $playerA->id,
+            'membership_number' => 'CM2-001',
+            'status' => ClubMembership::STATUS_APPROVED,
+        ]);
+        ClubMembership::create([
+            'club_id' => $this->club2->id,
+            'player_id' => $playerB->id,
+            'membership_number' => 'CM2-002',
+            'status' => ClubMembership::STATUS_APPROVED,
+        ]);
+
+        // 2. Submit team roster as club2 with sequence [playerB, playerA]
+        $submitResponse = $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['player_ids' => [$playerB->id, $playerA->id]],
+            ['Authorization' => "Bearer {$this->token2}"]
+        );
+
+        $submitResponse->assertOk();
+        $submitResponse->assertJsonPath('success', true);
+
+        // Assert player sequence in database
+        $team = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)
+            ->where('club_id', $this->club2->id)
+            ->first();
+
+        $this->assertDatabaseHas('tournament_team_players', [
+            'team_id' => $team->id,
+            'player_id' => $playerB->id,
+            'position' => 1,
+        ]);
+        $this->assertDatabaseHas('tournament_team_players', [
+            'team_id' => $team->id,
+            'player_id' => $playerA->id,
+            'position' => 2,
+        ]);
+
+        // 3. Fetch the team roster using GET and assert grouped sequence order
+        $getResponse = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['Authorization' => "Bearer {$this->token2}"]
+        );
+
+        $getResponse->assertOk();
+        $teams = $getResponse->json('teams');
+
+        // Find club2 team in the grouped teams list
+        $club2Team = collect($teams)->firstWhere('club_id', $this->club2->id);
+        $this->assertNotNull($club2Team);
+        $this->assertEquals('submitted', $club2Team['team_status']);
+        $this->assertCount(2, $club2Team['players']);
+        $this->assertEquals($playerB->id, $club2Team['players'][0]['player_id']);
+        $this->assertEquals(1, $club2Team['players'][0]['position']);
+        $this->assertEquals($playerA->id, $club2Team['players'][1]['player_id']);
+        $this->assertEquals(2, $club2Team['players'][1]['position']);
+
+        // 4. Validation duplicate player ID in submission -> 422
+        $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/team",
+            ['player_ids' => [$playerA->id, $playerA->id]],
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertStatus(422)
+         ->assertJsonPath('error_code', 'VALIDATION_ERROR');
+    }
 }
