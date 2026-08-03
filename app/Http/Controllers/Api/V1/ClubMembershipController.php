@@ -276,6 +276,9 @@ class ClubMembershipController extends Controller
             'status' => ['nullable', 'string', 'max:50'],
             'search' => ['nullable', 'string', 'max:255'],
             'sort' => ['nullable', 'string', 'in:name,-name,created_at,-created_at'],
+            'gender' => ['nullable', 'string', 'max:50'],
+            'player_level' => ['nullable', 'string', 'max:50'],
+            'group' => ['nullable', 'string', 'max:50'],
         ]);
 
         if ($validator->fails()) {
@@ -294,6 +297,39 @@ class ClubMembershipController extends Controller
         $query = ClubMembership::query()
             ->where('club_id', $club->id)
             ->where('status', $status);
+
+        if ($request->filled('gender')) {
+            $gender = strtolower($request->input('gender'));
+            if ($gender !== 'all') {
+                $query->whereHas('player', function ($q) use ($gender) {
+                    $q->whereRaw('LOWER(gender) = ?', [$gender]);
+                });
+            }
+        }
+
+        if ($request->filled('player_level')) {
+            $level = strtolower($request->input('player_level'));
+            $levelsToFilter = $level === 'professional' ? ['professional', 'advanced'] : [$level];
+            $query->whereHas('player', function ($q) use ($levelsToFilter) {
+                $q->whereIn(DB::raw('LOWER(playing_level)'), $levelsToFilter);
+            });
+        }
+
+        if ($request->filled('group')) {
+            $group = $request->input('group');
+            if (preg_match('/^(\d+)-(\d+)$/', $group, $matches)) {
+                $minAge = (int)$matches[1];
+                $maxAge = (int)$matches[2];
+                $query->whereHas('player', function ($q) use ($minAge, $maxAge) {
+                    $q->whereNotNull('dob');
+                    if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite') {
+                        $q->whereRaw("cast(strftime('%Y', 'now') - strftime('%Y', dob) as integer) BETWEEN ? AND ?", [$minAge, $maxAge]);
+                    } else {
+                        $q->whereRaw("TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN ? AND ?", [$minAge, $maxAge]);
+                    }
+                });
+            }
+        }
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -353,6 +389,13 @@ class ClubMembershipController extends Controller
             ],
             'membership_number' => ['required', 'string', 'max:255'],
             'verification_mode' => ['required', 'string', 'max:255'],
+            'membership_type' => ['sometimes', 'required', 'string', 'in:temporary,permanent'],
+            'membership_expiry_date' => [
+                \Illuminate\Validation\Rule::requiredIf(fn () => $request->input('membership_type') === 'temporary'),
+                'nullable',
+                'date',
+                'after:today',
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -367,6 +410,10 @@ class ClubMembershipController extends Controller
         $playerId = (int) $request->input('player_id');
         $membershipNumber = $request->input('membership_number');
         $verificationMode = $request->input('verification_mode');
+        $membershipType = $request->input('membership_type', 'permanent');
+        $expiryDate = $membershipType === 'temporary' && $request->filled('membership_expiry_date')
+            ? \Illuminate\Support\Carbon::parse($request->input('membership_expiry_date'))
+            : null;
 
         $exists = ClubMembership::where('club_id', $club->id)
             ->where('player_id', $playerId)
@@ -393,6 +440,8 @@ class ClubMembershipController extends Controller
                     'membership_number' => $membershipNumber,
                     'verification_mode' => $verificationMode,
                     'status' => ClubMembership::STATUS_APPROVED,
+                    'membership_type' => $membershipType,
+                    'membership_expiry_date' => $expiryDate,
                     'approved_at' => now(),
                 ]
             );
@@ -559,7 +608,7 @@ class ClubMembershipController extends Controller
                     'profile_image_url' => $player->profile_image ? (str_starts_with($player->profile_image, 'http') ? $player->profile_image : \Illuminate\Support\Facades\Storage::disk('public')->url($player->profile_image)) : null,
                     'dob' => $player->dob?->format('Y-m-d'),
                     'gender' => $player->gender,
-                    'playing_level' => $player->playing_level,
+                    'playing_level' => strtolower($player->playing_level) === 'advanced' ? 'professional' : $player->playing_level,
                     'primary_hand' => $player->primary_hand,
                     'bio' => $player->bio,
                 ],

@@ -391,6 +391,18 @@ class ClubController extends Controller
         ]);
     }
 
+    public function officials(Request $request): JsonResponse
+    {
+        $club = $request->user();
+        $officials = $this->clubService->getClubOfficials($club);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Club officials retrieved successfully.',
+            'data' => $officials,
+        ]);
+    }
+
     private function imageUrl(?string $path): ?string
     {
         if (! $path) {

@@ -92,6 +92,53 @@ class ClubService
                 $club->facilities = $this->normalizeFacilities($data['facilities']);
             }
 
+            if (array_key_exists('allow_non_member_booking', $data)) {
+                $club->non_member_booking_allowed = filter_var($data['allow_non_member_booking'], FILTER_VALIDATE_BOOLEAN);
+                if (!$club->non_member_booking_allowed) {
+                    \App\Models\ClubNonMemberWindow::where('club_id', $club->id)->delete();
+                    $club->non_member_booking_start_time = null;
+                    $club->non_member_booking_end_time = null;
+                }
+            }
+
+            if ($club->non_member_booking_allowed && isset($data['non_member_booking_schedule']) && is_array($data['non_member_booking_schedule'])) {
+                \App\Models\ClubNonMemberWindow::where('club_id', $club->id)->delete();
+                foreach ($data['non_member_booking_schedule'] as $nms) {
+                    $day = strtolower($nms['day']);
+                    $isAvail = filter_var($nms['is_available'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $timeRanges = $nms['time_ranges'] ?? [];
+
+                    if ($isAvail && is_array($timeRanges)) {
+                        foreach ($timeRanges as $range) {
+                            \App\Models\ClubNonMemberWindow::create([
+                                'club_id' => $club->id,
+                                'day' => $day,
+                                'is_available' => true,
+                                'from_time' => $range['from'],
+                                'to_time' => $range['to'],
+                            ]);
+                        }
+                    } else {
+                        \App\Models\ClubNonMemberWindow::create([
+                            'club_id' => $club->id,
+                            'day' => $day,
+                            'is_available' => false,
+                            'from_time' => null,
+                            'to_time' => null,
+                        ]);
+                    }
+                }
+
+                $firstAvailDay = collect($data['non_member_booking_schedule'])->first(fn ($nms) => filter_var($nms['is_available'] ?? false, FILTER_VALIDATE_BOOLEAN));
+                if ($firstAvailDay && !empty($firstAvailDay['time_ranges'])) {
+                    $club->non_member_booking_start_time = $firstAvailDay['time_ranges'][0]['from'];
+                    $club->non_member_booking_end_time = $firstAvailDay['time_ranges'][0]['to'];
+                } else {
+                    $club->non_member_booking_start_time = null;
+                    $club->non_member_booking_end_time = null;
+                }
+            }
+
             $club->number_of_courts = $club->courts()->count();
             $club->save();
 
@@ -492,6 +539,12 @@ class ClubService
             $tournament = $tournament->refresh()->load('club');
 
             if ($tournamentType === 'CLUB_TO_CLUB') {
+                if (isset($data['scorer_ids']) && is_array($data['scorer_ids'])) {
+                    $tournament->scorers()->sync($data['scorer_ids']);
+                }
+                if (isset($data['umpire_ids']) && is_array($data['umpire_ids'])) {
+                    $tournament->umpires()->sync($data['umpire_ids']);
+                }
                 // 1. Create separate invitation records for every invited club
                 foreach ($invitedClubIds as $invitedId) {
                     \App\Models\TournamentInvitation::create([
@@ -975,6 +1028,9 @@ class ClubService
         // 3. Level check
         if ($tournament->player_level && is_array($tournament->player_level)) {
             $allowedLevels = array_map('strtolower', $tournament->player_level);
+            if (in_array('professional', $allowedLevels, true) && !in_array('advanced', $allowedLevels, true)) {
+                $allowedLevels[] = 'advanced';
+            }
             if (!in_array(strtolower($player->playing_level), $allowedLevels, true)) {
                 return false;
             }
@@ -1043,6 +1099,9 @@ class ClubService
         // 2. Level check
         if ($tournament->player_level && is_array($tournament->player_level)) {
             $allowedLevels = array_map('strtolower', $tournament->player_level);
+            if (in_array('professional', $allowedLevels, true) && !in_array('advanced', $allowedLevels, true)) {
+                $allowedLevels[] = 'advanced';
+            }
             $query->whereIn(DB::raw('LOWER(playing_level)'), $allowedLevels);
         }
 
@@ -1517,6 +1576,53 @@ class ClubService
 
             return $registration;
         });
+    }
+
+    public function getClubOfficials(User $club): array
+    {
+        $memberPlayerIds = \App\Models\ClubMembership::where('club_id', $club->id)
+            ->where('status', \App\Models\ClubMembership::STATUS_APPROVED)
+            ->pluck('player_id')
+            ->all();
+
+        $scorers = User::whereIn('id', $memberPlayerIds)
+            ->where('are_you_scorer', true)
+            ->get()
+            ->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : \Illuminate\Support\Facades\Storage::disk('public')->url($u->profile_image)) : null,
+                    'playing_level' => strtolower($u->playing_level) === 'advanced' ? 'professional' : $u->playing_level,
+                    'dob' => $u->dob?->toDateString(),
+                    'gender' => $u->gender,
+                ];
+            })
+            ->all();
+
+        $umpires = User::whereIn('id', $memberPlayerIds)
+            ->where('are_you_umpire', true)
+            ->get()
+            ->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : \Illuminate\Support\Facades\Storage::disk('public')->url($u->profile_image)) : null,
+                    'playing_level' => strtolower($u->playing_level) === 'advanced' ? 'professional' : $u->playing_level,
+                    'dob' => $u->dob?->toDateString(),
+                    'gender' => $u->gender,
+                ];
+            })
+            ->all();
+
+        return [
+            'scorers' => $scorers,
+            'umpires' => $umpires,
+        ];
     }
 
     private function apiError(string $message, string $code, int $status = 422): never

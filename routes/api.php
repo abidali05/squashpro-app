@@ -99,6 +99,7 @@ Route::prefix('v1')->group(function () {
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
+            Route::get('officials', [ClubController::class, 'officials']);
 
             // Membership verification requests
             Route::get('membership-requests', [ClubMembershipController::class, 'indexRequests']);

@@ -53,6 +53,20 @@ class StoreTournamentRequest extends FormRequest
             'player_level.*' => ['required', 'string'],
             'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
             'maximum_players' => ['required', 'integer', 'min:1'],
+            'scorer_ids' => ['nullable', 'array'],
+            'scorer_ids.*' => [
+                'integer',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+                    $q->where('role', 'player');
+                }),
+            ],
+            'umpire_ids' => ['nullable', 'array'],
+            'umpire_ids.*' => [
+                'integer',
+                \Illuminate\Validation\Rule::exists('users', 'id')->where(function ($q) {
+                    $q->where('role', 'player');
+                }),
+            ],
         ];
 
         if ($isLegacy) {

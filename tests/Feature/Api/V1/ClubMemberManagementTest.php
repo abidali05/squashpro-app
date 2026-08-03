@@ -200,7 +200,7 @@ class ClubMemberManagementTest extends TestCase
             ->assertJsonPath('data.membership_number', 'CSC-200')
             ->assertJsonPath('data.booking_eligible', true)
             ->assertJsonPath('data.player.full_name', 'Babar Azam')
-            ->assertJsonPath('data.player.playing_level', 'advanced');
+            ->assertJsonPath('data.player.playing_level', 'professional');
     }
 
     public function test_club_members_list_and_details_expose_membership_type(): void
@@ -237,5 +237,96 @@ class ClubMemberManagementTest extends TestCase
         $responseDetail->assertOk()
             ->assertJsonPath('data.membership_type', 'temporary')
             ->assertJsonPath('data.membership_expiry_date', $expiry->toIso8601String());
+    }
+
+    public function test_add_club_member_stores_membership_type_and_listing_returns_expanded_player_info(): void
+    {
+        $player = User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+            'name' => 'Fakhar Zaman',
+            'dob' => '1990-04-10',
+            'gender' => 'male',
+            'playing_level' => 'intermediate',
+            'primary_hand' => 'left',
+            'bio' => 'Aggressive opening batsman',
+            'are_you_scorer' => true,
+            'are_you_umpire' => false,
+        ]);
+
+        $expiry = now()->addDays(30)->startOfDay();
+        // 1. Post to add member with temporary membership_type
+        $responseAdd = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->postJson('/api/v1/club/members', [
+                'player_id' => $player->id,
+                'membership_number' => 'CSC-900',
+                'verification_mode' => 'manual',
+                'membership_type' => 'temporary',
+                'membership_expiry_date' => $expiry->toDateString(),
+            ]);
+
+        $responseAdd->assertStatus(201);
+
+        // Verify stored in DB
+        $this->assertDatabaseHas('club_memberships', [
+            'club_id' => $this->club->id,
+            'player_id' => $player->id,
+            'membership_number' => 'CSC-900',
+            'membership_type' => 'temporary',
+        ]);
+
+        // 2. Fetch list of members and assert expanded player properties
+        $responseList = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->getJson('/api/v1/club/members');
+
+        $responseList->assertOk();
+        $members = $responseList->json('data');
+        $fakharMember = collect($members)->firstWhere('membership_number', 'CSC-900');
+
+        $this->assertNotNull($fakharMember);
+        $this->assertEquals('temporary', $fakharMember['membership_type']);
+        $this->assertEquals($expiry->toIso8601String(), $fakharMember['membership_expiry_date']);
+        
+        // Assert complete player details are present
+        $playerData = $fakharMember['player'];
+        $this->assertEquals('Fakhar Zaman', $playerData['full_name']);
+        $this->assertEquals('1990-04-10', $playerData['dob']);
+        $this->assertEquals('male', $playerData['gender']);
+        $this->assertEquals('intermediate', $playerData['playing_level']);
+        $this->assertEquals('left', $playerData['primary_hand']);
+        $this->assertEquals('Aggressive opening batsman', $playerData['bio']);
+        $this->assertTrue($playerData['are_you_scorer']);
+        $this->assertFalse($playerData['are_you_umpire']);
+    }
+
+    public function test_add_club_member_validates_temporary_expiry_date(): void
+    {
+        $player1 = User::factory()->create(['role' => 'player', 'status' => 'active']);
+        $player2 = User::factory()->create(['role' => 'player', 'status' => 'active']);
+
+        // 1. Fail because expiry date is omitted for temporary membership
+        $responseOmitted = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->postJson('/api/v1/club/members', [
+                'player_id' => $player1->id,
+                'membership_number' => 'CSC-901',
+                'verification_mode' => 'manual',
+                'membership_type' => 'temporary',
+            ]);
+
+        $responseOmitted->assertStatus(422)
+            ->assertJsonValidationErrors(['membership_expiry_date']);
+
+        // 2. Fail because expiry date is in the past
+        $responsePast = $this->withHeader('Authorization', 'Bearer ' . $this->token)
+            ->postJson('/api/v1/club/members', [
+                'player_id' => $player2->id,
+                'membership_number' => 'CSC-902',
+                'verification_mode' => 'manual',
+                'membership_type' => 'temporary',
+                'membership_expiry_date' => now()->subDay()->toDateString(),
+            ]);
+
+        $responsePast->assertStatus(422)
+            ->assertJsonValidationErrors(['membership_expiry_date']);
     }
 }

@@ -223,11 +223,30 @@ class PlayerClubController extends Controller
 
     public function courts(ClubCourtsRequest $request, string $club_id): JsonResponse
     {
-        $courts = $this->playerBookingService->clubCourts((int) $club_id, $request->string('date')->toString());
+        $dateStr = $request->string('date')->toString();
+        $courts = $this->playerBookingService->clubCourts((int) $club_id, $dateStr);
+
+        $club = User::findOrFail((int) $club_id);
+        $day = strtolower(\Carbon\Carbon::parse($dateStr)->format('l'));
+        $win = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
+            ->where('day', $day)
+            ->first();
+
+        $fromTime = $club->non_member_booking_allowed ? ($win ? ($win->from_time ? substr((string)$win->from_time, 0, 5) : null) : ($club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null)) : null;
+        $toTime = $club->non_member_booking_allowed ? ($win ? ($win->to_time ? substr((string)$win->to_time, 0, 5) : null) : ($club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null)) : null;
+
+        $nonMemberBooking = [
+            'allow_non_member_booking' => (bool) $club->non_member_booking_allowed,
+            'day' => $day,
+            'is_available' => $club->non_member_booking_allowed ? ($win ? (bool)$win->is_available : true) : false,
+            'from_time' => $fromTime,
+            'to_time' => $toTime,
+        ];
 
         return response()->json([
             'success' => true,
             'message' => 'Courts fetched successfully',
+            'club_non_member_booking' => $nonMemberBooking,
             'data' => PlayerCourtResource::collection(collect($courts)),
         ]);
     }

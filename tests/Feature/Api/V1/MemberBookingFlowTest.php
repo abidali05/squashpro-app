@@ -136,6 +136,13 @@ class MemberBookingFlowTest extends TestCase
         $this->assertEquals('MEM-ALPHA-001', $detail['membership_number']);
         $this->assertTrue($detail['can_book']);
         $this->assertFalse($detail['requires_payment']);
+
+        $this->assertIsArray($detail['working_hours']);
+        $this->assertCount(7, $detail['working_hours']);
+        $this->assertEquals('monday', $detail['working_hours'][0]['day']);
+        $this->assertTrue($detail['working_hours'][0]['is_open']);
+        $this->assertEquals('08:00', $detail['working_hours'][0]['opens_at']);
+        $this->assertEquals('22:00', $detail['working_hours'][0]['closes_at']);
     }
 
     public function test_approved_member_booking_free_and_direct(): void

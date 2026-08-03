@@ -37,9 +37,29 @@ class PlayerTournamentDetailResource extends JsonResource
             'tournament_type'       => $this->tournament_type,
             'opponent_club_id'      => $this->opponent_club_id,
             'gender'                => $this->gender,
-            'player_level'          => $this->player_level,
+            'player_level'          => array_map(function ($lvl) {
+                return strtolower($lvl) === 'advanced' ? 'professional' : $lvl;
+            }, $this->player_level ?? []),
             'age_group'             => $this->age_group,
             'maximum_players'       => $this->maximum_players,
+            'scorers' => $this->tournament_type === 'CLUB_TO_CLUB' ? $this->scorers->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : Storage::disk('public')->url($u->profile_image)) : null,
+                ];
+            })->all() : [],
+            'umpires' => $this->tournament_type === 'CLUB_TO_CLUB' ? $this->umpires->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : Storage::disk('public')->url($u->profile_image)) : null,
+                ];
+            })->all() : [],
 
             // Registration details
             'registration'          => $registration ? [
