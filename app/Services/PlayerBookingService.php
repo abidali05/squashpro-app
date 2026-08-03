@@ -73,7 +73,15 @@ class PlayerBookingService
         $club = $this->findClub($clubId);
         $courts = $club->courts()->orderBy('id')->get();
 
-        return $courts->map(function (Court $court) use ($club) {
+        $day = strtolower(\Carbon\Carbon::parse($date)->format('l'));
+        $win = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
+            ->where('day', $day)
+            ->first();
+
+        $fromTime = $club->non_member_booking_allowed ? ($win ? ($win->from_time ? substr((string)$win->from_time, 0, 5) : null) : ($club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null)) : null;
+        $toTime = $club->non_member_booking_allowed ? ($win ? ($win->to_time ? substr((string)$win->to_time, 0, 5) : null) : ($club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null)) : null;
+
+        return $courts->map(function (Court $court) use ($club, $fromTime, $toTime) {
             $status = match (true) {
                 in_array($court->status, ['maintenance', 'inactive'], true) => 'maintenance',
                 $court->status === 'active' => 'available',
@@ -92,6 +100,9 @@ class PlayerBookingService
                     'available' => 'Available',
                     default => 'Unavailable',
                 },
+                'allow_non_member_booking' => (bool) $club->non_member_booking_allowed,
+                'non_member_booking_start_time' => $fromTime,
+                'non_member_booking_end_time' => $toTime,
             ];
         })->values()->all();
     }
@@ -422,6 +433,53 @@ class PlayerBookingService
         $canBook = $isMember || $allowNonMemberBooking;
         $requiresPayment = !$isMember;
 
+        $dbWorkingHours = \App\Models\ClubWorkingHour::where('club_id', $club->id)->get();
+        if ($dbWorkingHours->isNotEmpty()) {
+            $workingHoursList = $dbWorkingHours->map(function ($wh) {
+                return [
+                    'day' => $wh->day,
+                    'is_open' => (bool) $wh->is_open,
+                    'opens_at' => $wh->opens_at ? substr((string)$wh->opens_at, 0, 5) : null,
+                    'closes_at' => $wh->closes_at ? substr((string)$wh->closes_at, 0, 5) : null,
+                ];
+            })->all();
+        } else {
+            $whParsed = $this->parseWorkingHours($club->working_hours);
+            $workingHoursList = [];
+            $daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            foreach ($daysOfWeek as $d) {
+                $workingHoursList[] = [
+                    'day' => $d,
+                    'is_open' => $whParsed['start'] && $whParsed['end'] ? true : false,
+                    'opens_at' => $whParsed['start'],
+                    'closes_at' => $whParsed['end'],
+                ];
+            }
+        }
+
+        $dbWindows = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)->get();
+        if ($dbWindows->isNotEmpty()) {
+            $nonMemberBookingSchedule = $dbWindows->map(function ($win) {
+                return [
+                    'day' => $win->day,
+                    'is_available' => (bool) $win->is_available,
+                    'from_time' => $win->from_time ? substr((string)$win->from_time, 0, 5) : null,
+                    'to_time' => $win->to_time ? substr((string)$win->to_time, 0, 5) : null,
+                ];
+            })->all();
+        } else {
+            $nonMemberBookingSchedule = [];
+            $daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            foreach ($daysOfWeek as $d) {
+                $nonMemberBookingSchedule[] = [
+                    'day' => $d,
+                    'is_available' => $allowNonMemberBooking,
+                    'from_time' => $allowNonMemberBooking && $club->non_member_booking_start_time ? substr($club->non_member_booking_start_time, 0, 5) : null,
+                    'to_time' => $allowNonMemberBooking && $club->non_member_booking_end_time ? substr($club->non_member_booking_end_time, 0, 5) : null,
+                ];
+            }
+        }
+
         return [
             'club_id' => $club->id,
             'club_name' => $club->club_name ?? $club->name,
@@ -436,11 +494,13 @@ class PlayerBookingService
             'facilities' => $club->facilities ?? [],
             'courts_count' => $club->courts()->count(),
             'lowest_court_price' => $this->lowestCourtPrice($club),
+            'working_hours' => $workingHoursList,
 
             // Required MaxSquash v1.4 fields
             'allow_non_member_booking' => $allowNonMemberBooking,
             'non_member_booking_start_time' => $allowNonMemberBooking ? ($club->non_member_booking_start_time ? substr($club->non_member_booking_start_time, 0, 5) : null) : null,
             'non_member_booking_end_time' => $allowNonMemberBooking ? ($club->non_member_booking_end_time ? substr($club->non_member_booking_end_time, 0, 5) : null) : null,
+            'non_member_booking_schedule' => $nonMemberBookingSchedule,
             'is_member' => $isMember,
             'membership_status' => $membershipInfo['membership_status'],
             'membership_number' => $membershipInfo['membership_number'],

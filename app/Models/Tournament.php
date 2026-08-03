@@ -78,4 +78,14 @@ class Tournament extends Model
     {
         return $this->hasMany(TournamentTeam::class);
     }
+
+    public function scorers()
+    {
+        return $this->belongsToMany(User::class, 'tournament_scorers', 'tournament_id', 'user_id')->withTimestamps();
+    }
+
+    public function umpires()
+    {
+        return $this->belongsToMany(User::class, 'tournament_umpires', 'tournament_id', 'user_id')->withTimestamps();
+    }
 }

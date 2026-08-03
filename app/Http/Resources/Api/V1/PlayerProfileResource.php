@@ -23,7 +23,7 @@ class PlayerProfileResource extends JsonResource
             'city_name' => $this->cityRelation?->name ?? $this->city,
             'dob' => $this->dob?->toDateString(),
             'gender' => $this->gender,
-            'playing_level' => $this->playing_level,
+            'playing_level' => ($this->playing_level && strtolower($this->playing_level) === 'advanced') ? 'professional' : $this->playing_level,
             'primary_hand' => $this->primary_hand,
             'bio' => $this->bio,
             'total_matches_played' => 0,

@@ -23,7 +23,9 @@ class TournamentResource extends JsonResource
             'format' => $this->format,
             'tournament_image' => $this->resolveImageUrl($this->tournament_image),
             'gender' => $this->gender,
-            'player_level' => $this->player_level,
+            'player_level' => array_map(function ($lvl) {
+                return strtolower($lvl) === 'advanced' ? 'professional' : $lvl;
+            }, $this->player_level ?? []),
             'age_group' => $this->age_group,
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
@@ -40,6 +42,24 @@ class TournamentResource extends JsonResource
             'updated_at' => $this->updated_at?->toIso8601String(),
             'is_creator' => $this->club_id === $authId,
             'is_opponent' => $this->opponent_club_id === $authId,
+            'scorers' => $this->tournament_type === 'CLUB_TO_CLUB' ? $this->scorers->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : Storage::disk('public')->url($u->profile_image)) : null,
+                ];
+            })->all() : [],
+            'umpires' => $this->tournament_type === 'CLUB_TO_CLUB' ? $this->umpires->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'full_name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'profile_image_url' => $u->profile_image ? (str_starts_with($u->profile_image, 'http') ? $u->profile_image : Storage::disk('public')->url($u->profile_image)) : null,
+                ];
+            })->all() : [],
         ];
     }
 
