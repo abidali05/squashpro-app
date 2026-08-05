@@ -74,12 +74,27 @@ class PlayerBookingService
         $courts = $club->courts()->orderBy('id')->get();
 
         $day = strtolower(\Carbon\Carbon::parse($date)->format('l'));
-        $win = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
+        $windows = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
             ->where('day', $day)
-            ->first();
+            ->get();
 
-        $fromTime = $club->non_member_booking_allowed ? ($win ? ($win->from_time ? substr((string)$win->from_time, 0, 5) : null) : ($club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null)) : null;
-        $toTime = $club->non_member_booking_allowed ? ($win ? ($win->to_time ? substr((string)$win->to_time, 0, 5) : null) : ($club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null)) : null;
+        $fromTime = null;
+        $toTime = null;
+
+        if ($club->non_member_booking_allowed) {
+            if ($windows->isNotEmpty()) {
+                $availableWindows = $windows->where('is_available', true);
+                if ($availableWindows->isNotEmpty()) {
+                    $minStart = $availableWindows->min('from_time');
+                    $maxEnd = $availableWindows->max('to_time');
+                    $fromTime = $minStart ? substr((string)$minStart, 0, 5) : null;
+                    $toTime = $maxEnd ? substr((string)$maxEnd, 0, 5) : null;
+                }
+            } else {
+                $fromTime = $club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null;
+                $toTime = $club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null;
+            }
+        }
 
         return $courts->map(function (Court $court) use ($club, $fromTime, $toTime) {
             $status = match (true) {
@@ -107,7 +122,7 @@ class PlayerBookingService
         })->values()->all();
     }
 
-    public function timeSlots(int $clubId, int $courtId, string $date): array
+    public function timeSlots(int $clubId, int $courtId, string $date, ?User $player = null): array
     {
         $club = $this->findClub($clubId);
         $court = $this->findCourt($courtId);
@@ -118,7 +133,113 @@ class PlayerBookingService
             $this->apiError('Selected court does not belong to selected club.', ApiErrorCode::COURT_NOT_IN_CLUB);
         }
 
+        $isApprovedMember = false;
+        if ($player) {
+            $isApprovedMember = \App\Models\ClubMembership::where('player_id', $player->id)
+                ->where('club_id', $club->id)
+                ->where('status', 'approved')
+                ->exists();
+        }
+
+        $day = strtolower(Carbon::parse($date)->format('l'));
+        $nonMemberAllowedOnDay = (bool) $club->non_member_booking_allowed;
+
+        $configuredSlots = \App\Models\CourtSlot::where('court_id', $court->id)
+            ->where('day', $day)
+            ->get();
+
+        $allowedRanges = [];
+        if (!$isApprovedMember && $club->non_member_booking_allowed) {
+            if ($configuredSlots->isNotEmpty()) {
+                foreach ($configuredSlots as $cs) {
+                    if ($cs->is_available) {
+                        $allowedRanges[] = [
+                            'start' => substr((string)$cs->start_time, 0, 5),
+                            'end' => substr((string)$cs->end_time, 0, 5),
+                        ];
+                    }
+                }
+            } else {
+                if ($club->non_member_booking_start_time && $club->non_member_booking_end_time) {
+                    $allowedRanges[] = [
+                        'start' => substr((string)$club->non_member_booking_start_time, 0, 5),
+                        'end' => substr((string)$club->non_member_booking_end_time, 0, 5),
+                    ];
+                }
+            }
+        }
+
         $slots = $this->ensureSlotsForCourt($club, $court, $date);
+
+        $configuredSlots = \App\Models\CourtSlot::where('court_id', $court->id)
+            ->where('day', $day)
+            ->get();
+
+        foreach ($slots as $slot) {
+            $slotStartStr = $slot->start_time;
+            $slotEndStr = $slot->end_time;
+
+            $match = $configuredSlots->first(function ($cs) use ($slotStartStr, $slotEndStr) {
+                return substr($cs->start_time, 0, 5) === substr($slotStartStr, 0, 5)
+                    && substr($cs->end_time, 0, 5) === substr($slotEndStr, 0, 5);
+            });
+
+            if ($match) {
+                $changed = false;
+                if ($this->normalizeNumber($slot->price) !== $this->normalizeNumber($match->price)) {
+                    $slot->price = $match->price;
+                    $changed = true;
+                }
+
+                if (!$match->is_available && $slot->status === 'available') {
+                    $slot->status = 'blocked';
+                    $changed = true;
+                } elseif ($match->is_available && $slot->status === 'blocked' && !$slot->booking_id && $court->status === 'active') {
+                    $slot->status = 'available';
+                    $changed = true;
+                }
+
+                if ($changed) {
+                    $slot->save();
+                }
+            }
+        }
+
+        if (!$isApprovedMember) {
+            if (!$nonMemberAllowedOnDay) {
+                $slots = collect();
+            } else {
+                $slots = $slots->filter(function (CourtTimeSlot $slot) use ($allowedRanges) {
+                    if (empty($allowedRanges)) {
+                        return true;
+                    }
+                    $slotStart = substr((string) $slot->start_time, 0, 5);
+                    $slotEnd = substr((string) $slot->end_time, 0, 5);
+
+                    foreach ($allowedRanges as $range) {
+                        $allowedStartStr = $range['start'];
+                        $allowedEndStr = $range['end'];
+
+                        $startMatch = false;
+                        $endMatch = false;
+
+                        if ($allowedStartStr <= $allowedEndStr) {
+                            $startMatch = ($slotStart >= $allowedStartStr && $slotStart <= $allowedEndStr);
+                            $endMatch = ($slotEnd >= $allowedStartStr && $slotEnd <= $allowedEndStr);
+                        } else {
+                            $startMatch = ($slotStart >= $allowedStartStr || $slotStart <= $allowedEndStr);
+                            $endMatch = ($slotEnd >= $allowedStartStr || $slotEnd <= $allowedEndStr);
+                        }
+
+                        if ($startMatch && $endMatch) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            }
+        }
+
         $blockedCourt = in_array($court->status, ['maintenance', 'inactive'], true);
 
         return [
@@ -171,7 +292,7 @@ class PlayerBookingService
                 $this->apiError('Selected time slot is unavailable.', ApiErrorCode::COURT_UNAVAILABLE);
             }
 
-            $workingHours = $this->parseWorkingHours($club->working_hours);
+            $workingHours = $this->getWorkingHoursForDate($club, $slot->booking_date);
             if (! $this->slotWithinClubHours($slot, $workingHours)) {
                 $this->apiError('Club is closed at selected time.', ApiErrorCode::CLUB_CLOSED);
             }
@@ -190,26 +311,46 @@ class PlayerBookingService
                     $this->apiError('Non-member booking is disabled for this club. Only approved club members are allowed to book.', ApiErrorCode::NON_MEMBER_BOOKING_DISABLED, 403);
                 }
 
-                // Check non-member allowed daily window
-                if ($club->non_member_booking_start_time && $club->non_member_booking_end_time) {
-                    $slotStart = substr($slot->start_time, 0, 5);
-                    $slotEnd = substr($slot->end_time, 0, 5);
-                    $allowedStart = substr($club->non_member_booking_start_time, 0, 5);
-                    $allowedEnd = substr($club->non_member_booking_end_time, 0, 5);
+                $bookingDate = Carbon::parse($slot->booking_date)->toDateString();
+                $day = strtolower(Carbon::parse($bookingDate)->format('l'));
 
-                    $startMatch = false;
-                    $endMatch = false;
+                $configuredSlots = \App\Models\CourtSlot::where('court_id', $court->id)
+                    ->where('day', $day)
+                    ->get();
 
-                    if ($allowedStart <= $allowedEnd) {
-                        $startMatch = ($slotStart >= $allowedStart && $slotStart <= $allowedEnd);
-                        $endMatch = ($slotEnd >= $allowedStart && $slotEnd <= $allowedEnd);
-                    } else {
-                        $startMatch = ($slotStart >= $allowedStart || $slotStart <= $allowedEnd);
-                        $endMatch = ($slotEnd >= $allowedStart || $slotEnd <= $allowedEnd);
+                if ($configuredSlots->isNotEmpty()) {
+                    $match = $configuredSlots->first(function ($cs) use ($slot) {
+                        return substr($cs->start_time, 0, 5) === substr($slot->start_time, 0, 5)
+                            && substr($cs->end_time, 0, 5) === substr($slot->end_time, 0, 5);
+                    });
+
+                    if (!$match || !$match->is_available) {
+                        $this->apiError("This slot is not available for non-members.", ApiErrorCode::OUTSIDE_NON_MEMBER_WINDOW, 422);
                     }
+                } else {
+                    $allowedStart = $club->non_member_booking_start_time;
+                    $allowedEnd = $club->non_member_booking_end_time;
 
-                    if (!$startMatch || !$endMatch) {
-                        $this->apiError("Non-members are only allowed to book within the time window: {$allowedStart} - {$allowedEnd}.", ApiErrorCode::OUTSIDE_NON_MEMBER_WINDOW, 422);
+                    if ($allowedStart && $allowedEnd) {
+                        $slotStart = substr($slot->start_time, 0, 5);
+                        $slotEnd = substr($slot->end_time, 0, 5);
+                        $allowedStartStr = substr($allowedStart, 0, 5);
+                        $allowedEndStr = substr($allowedEnd, 0, 5);
+
+                        $startMatch = false;
+                        $endMatch = false;
+
+                        if ($allowedStartStr <= $allowedEndStr) {
+                            $startMatch = ($slotStart >= $allowedStartStr && $slotStart <= $allowedEndStr);
+                            $endMatch = ($slotEnd >= $allowedStartStr && $slotEnd <= $allowedEndStr);
+                        } else {
+                            $startMatch = ($slotStart >= $allowedStartStr || $slotStart <= $allowedEndStr);
+                            $endMatch = ($slotEnd >= $allowedStartStr || $slotEnd <= $allowedEndStr);
+                        }
+
+                        if (!$startMatch || !$endMatch) {
+                            $this->apiError("Non-members are only allowed to book within the time window: {$allowedStartStr} - {$allowedEndStr}.", ApiErrorCode::OUTSIDE_NON_MEMBER_WINDOW, 422);
+                        }
                     }
                 }
             }
@@ -381,7 +522,8 @@ class PlayerBookingService
 
     private function clubSummary(User $club, User $player, $memberships, $requests): array
     {
-        $workingHours = $this->parseWorkingHours($club->working_hours);
+        $todayDate = Carbon::now('Asia/Karachi')->toDateString();
+        $workingHours = $this->getWorkingHoursForDate($club, $todayDate);
         $lowestPrice = $this->lowestCourtPrice($club);
 
         $membershipInfo = $this->resolveMembership($player, $club->id, $memberships, $requests);
@@ -417,7 +559,8 @@ class PlayerBookingService
 
     private function clubDetail(User $club, User $player, $memberships = null, $requests = null): array
     {
-        $workingHours = $this->parseWorkingHours($club->working_hours);
+        $todayDate = Carbon::now('Asia/Karachi')->toDateString();
+        $workingHours = $this->getWorkingHoursForDate($club, $todayDate);
 
         if ($memberships === null) {
             $memberships = \App\Models\ClubMembership::where('player_id', $player->id)->get()->groupBy('club_id');
@@ -511,18 +654,7 @@ class PlayerBookingService
 
     private function ensureSlotsForCourt(User $club, Court $court, string $date): Collection
     {
-        $existing = CourtTimeSlot::query()
-            ->where('club_id', $club->id)
-            ->where('court_id', $court->id)
-            ->whereDate('booking_date', $date)
-            ->orderBy('start_time')
-            ->get();
-
-        if ($existing->isNotEmpty()) {
-            return $existing;
-        }
-
-        $workingHours = $this->parseWorkingHours($club->working_hours);
+        $workingHours = $this->getWorkingHoursForDate($club, $date);
         $startTime = Carbon::createFromFormat('H:i', $workingHours['start'], 'Asia/Karachi');
         $endTime = Carbon::createFromFormat('H:i', $workingHours['end'], 'Asia/Karachi');
 
@@ -531,20 +663,55 @@ class PlayerBookingService
             $endTime = Carbon::createFromFormat('H:i', '23:00', 'Asia/Karachi');
         }
 
+        $existing = CourtTimeSlot::query()
+            ->where('club_id', $club->id)
+            ->where('court_id', $court->id)
+            ->whereDate('booking_date', $date)
+            ->orderBy('start_time')
+            ->get();
+
+        $day = strtolower(Carbon::parse($date)->format('l'));
+        $configuredSlots = \App\Models\CourtSlot::where('court_id', $court->id)
+            ->where('day', $day)
+            ->get();
+
         $slots = [];
         $cursor = $startTime->copy();
         while ($cursor->copy()->addHour()->lessThanOrEqualTo($endTime)) {
             $slotStart = $cursor->copy();
             $slotEnd = $cursor->copy()->addHour();
-            $slots[] = CourtTimeSlot::create([
-                'club_id' => $club->id,
-                'court_id' => $court->id,
-                'booking_date' => $date,
-                'start_time' => $slotStart->format('H:i:s'),
-                'end_time' => $slotEnd->format('H:i:s'),
-                'status' => in_array($court->status, ['maintenance', 'inactive'], true) ? 'blocked' : 'available',
-                'price' => $court->price_per_hour,
-            ]);
+            $slotStartStr = $slotStart->format('H:i:s');
+            $slotEndStr = $slotEnd->format('H:i:s');
+
+            $exists = $existing->first(function ($s) use ($slotStartStr, $slotEndStr) {
+                return substr($s->start_time, 0, 5) === substr($slotStartStr, 0, 5)
+                    && substr($s->end_time, 0, 5) === substr($slotEndStr, 0, 5);
+            });
+
+            if ($exists) {
+                $slots[] = $exists;
+            } else {
+                $match = $configuredSlots->first(function ($cs) use ($slotStartStr, $slotEndStr) {
+                    return substr($cs->start_time, 0, 5) === substr($slotStartStr, 0, 5)
+                        && substr($cs->end_time, 0, 5) === substr($slotEndStr, 0, 5);
+                });
+
+                $price = $match ? $match->price : $court->price_per_hour;
+                $isBlocked = in_array($court->status, ['maintenance', 'inactive'], true);
+                if ($match && !$match->is_available) {
+                    $isBlocked = true;
+                }
+
+                $slots[] = CourtTimeSlot::create([
+                    'club_id' => $club->id,
+                    'court_id' => $court->id,
+                    'booking_date' => $date,
+                    'start_time' => $slotStartStr,
+                    'end_time' => $slotEndStr,
+                    'status' => $isBlocked ? 'blocked' : 'available',
+                    'price' => $price,
+                ]);
+            }
             $cursor->addHour();
         }
 
@@ -584,6 +751,28 @@ class PlayerBookingService
             ->min('price_per_hour');
 
         return $this->normalizeNumber($price ?? 0);
+    }
+
+    private function getWorkingHoursForDate(User $club, string $date): array
+    {
+        $day = strtolower(Carbon::parse($date)->format('l'));
+        $wh = \App\Models\ClubWorkingHour::where('club_id', $club->id)
+            ->where('day', $day)
+            ->first();
+
+        if ($wh && $wh->is_open && $wh->opens_at && $wh->closes_at) {
+            return [
+                'start' => substr((string)$wh->opens_at, 0, 5),
+                'end' => substr((string)$wh->closes_at, 0, 5),
+            ];
+        }
+
+        // Fallback to legacy working_hours string
+        if ($club->working_hours && preg_match('/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/', $club->working_hours, $matches)) {
+            return ['start' => $matches[1], 'end' => $matches[2]];
+        }
+
+        return ['start' => '08:00', 'end' => '23:00'];
     }
 
     private function parseWorkingHours(?string $workingHours): array

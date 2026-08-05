@@ -29,7 +29,7 @@ class ClubMembershipResource extends JsonResource
                 'full_name' => $player->name ?? '',
                 'email' => $player->email ?? '',
                 'phone' => $player->phone ?? '',
-                'profile_image_url' => $player && $player->profile_image ? (str_starts_with($player->profile_image, 'http') ? $player->profile_image : Storage::disk('public')->url($player->profile_image)) : null,
+                'profile_image_url' => $player ? app_image_url($player->profile_image) : null,
                 'dob' => $player && $player->dob ? ($player->dob instanceof \Carbon\Carbon ? $player->dob->format('Y-m-d') : substr((string)$player->dob, 0, 10)) : null,
                 'gender' => $player->gender ?? null,
                 'playing_level' => ($player && strtolower($player->playing_level ?? '') === 'advanced') ? 'professional' : ($player->playing_level ?? null),

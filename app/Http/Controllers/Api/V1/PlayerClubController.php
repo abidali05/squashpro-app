@@ -228,17 +228,35 @@ class PlayerClubController extends Controller
 
         $club = User::findOrFail((int) $club_id);
         $day = strtolower(\Carbon\Carbon::parse($dateStr)->format('l'));
-        $win = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
+        $windows = \App\Models\ClubNonMemberWindow::where('club_id', $club->id)
             ->where('day', $day)
-            ->first();
+            ->get();
 
-        $fromTime = $club->non_member_booking_allowed ? ($win ? ($win->from_time ? substr((string)$win->from_time, 0, 5) : null) : ($club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null)) : null;
-        $toTime = $club->non_member_booking_allowed ? ($win ? ($win->to_time ? substr((string)$win->to_time, 0, 5) : null) : ($club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null)) : null;
+        $fromTime = null;
+        $toTime = null;
+        $isAvailable = false;
+
+        if ($club->non_member_booking_allowed) {
+            if ($windows->isNotEmpty()) {
+                $availableWindows = $windows->where('is_available', true);
+                if ($availableWindows->isNotEmpty()) {
+                    $isAvailable = true;
+                    $minStart = $availableWindows->min('from_time');
+                    $maxEnd = $availableWindows->max('to_time');
+                    $fromTime = $minStart ? substr((string)$minStart, 0, 5) : null;
+                    $toTime = $maxEnd ? substr((string)$maxEnd, 0, 5) : null;
+                }
+            } else {
+                $isAvailable = true;
+                $fromTime = $club->non_member_booking_start_time ? substr((string)$club->non_member_booking_start_time, 0, 5) : null;
+                $toTime = $club->non_member_booking_end_time ? substr((string)$club->non_member_booking_end_time, 0, 5) : null;
+            }
+        }
 
         $nonMemberBooking = [
             'allow_non_member_booking' => (bool) $club->non_member_booking_allowed,
             'day' => $day,
-            'is_available' => $club->non_member_booking_allowed ? ($win ? (bool)$win->is_available : true) : false,
+            'is_available' => $isAvailable,
             'from_time' => $fromTime,
             'to_time' => $toTime,
         ];
@@ -256,7 +274,8 @@ class PlayerClubController extends Controller
         $payload = $this->playerBookingService->timeSlots(
             (int) $request->integer('club_id'),
             (int) $court_id,
-            $request->string('date')->toString()
+            $request->string('date')->toString(),
+            $request->user()
         );
 
         return response()->json([

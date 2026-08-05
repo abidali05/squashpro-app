@@ -14,7 +14,7 @@ class IndexTournamentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['nullable', 'in:open,full,closed,completed,cancelled'],
+            'status' => ['nullable', 'in:open,full,closed,completed,cancelled,pending,soft_accepted,confirmed,rejected,accepted'],
             'page' => ['nullable', 'integer', 'min:1'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

@@ -405,14 +405,6 @@ class ClubController extends Controller
 
     private function imageUrl(?string $path): ?string
     {
-        if (! $path) {
-            return null;
-        }
-
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-
-        return asset('storage/' . $path);
+        return app_image_url($path);
     }
 }

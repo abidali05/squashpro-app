@@ -605,7 +605,7 @@ class ClubMembershipController extends Controller
                     'last_name' => $lastName,
                     'email' => $player->email,
                     'phone' => $player->phone,
-                    'profile_image_url' => $player->profile_image ? (str_starts_with($player->profile_image, 'http') ? $player->profile_image : \Illuminate\Support\Facades\Storage::disk('public')->url($player->profile_image)) : null,
+                    'profile_image_url' => app_image_url($player->profile_image),
                     'dob' => $player->dob?->format('Y-m-d'),
                     'gender' => $player->gender,
                     'playing_level' => strtolower($player->playing_level) === 'advanced' ? 'professional' : $player->playing_level,

@@ -38,7 +38,7 @@
         <select name="opponent_club_id" id="opponent_club_id" class="form-select @error('opponent_club_id') is-invalid @enderror">
             <option value="">Select Opponent Club</option>
             @foreach($clubs as $club)
-                <option value="{{ $club->id }}" @selected(old('opponent_club_id', $tournament?->opponent_club_id ?? '') == $club->id)>
+                <option value="{{ $club->id }}" @selected(old('opponent_club_id', is_array($tournament?->opponent_club_id) ? ($tournament->opponent_club_id[0] ?? '') : ($tournament?->opponent_club_id ?? '')) == $club->id)>
                     {{ $club->club_name ?? $club->name }} ({{ $club->city ?? 'No City' }})
                 </option>
             @endforeach

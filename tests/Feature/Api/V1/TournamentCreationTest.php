@@ -79,17 +79,16 @@ class TournamentCreationTest extends TestCase
         $this->assertEquals('pending', $response->json('data.status'));
 
         // Assert database records
-        $this->assertDatabaseHas('tournaments', [
-            'id' => $tournamentId,
-            'club_id' => $this->club1->id,
-            'opponent_club_id' => $this->club2->id,
-            'tournament_type' => 'CLUB_TO_CLUB',
-            'status' => 'pending',
-            'maximum_players' => 10,
-            'allowed_player' => 10,
-            'gender' => 'MALE',
-            'age_group' => '15-25',
-        ]);
+        $tournament = Tournament::find($tournamentId);
+        $this->assertNotNull($tournament);
+        $this->assertEquals($this->club1->id, $tournament->club_id);
+        $this->assertEquals([$this->club2->id], $tournament->opponent_club_id);
+        $this->assertEquals('CLUB_TO_CLUB', $tournament->tournament_type);
+        $this->assertEquals('pending', $tournament->status);
+        $this->assertEquals(10, $tournament->maximum_players);
+        $this->assertEquals(10, $tournament->allowed_player);
+        $this->assertEquals('MALE', $tournament->gender);
+        $this->assertEquals('15-25', $tournament->age_group);
 
         // Assert player_level array is saved correctly
         $tournament = Tournament::find($tournamentId);

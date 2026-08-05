@@ -46,7 +46,7 @@ class BookingDetailResource extends JsonResource
                 'name' => $player?->name,
                 'email' => $player?->email,
                 'phone' => $player?->phone,
-                'profile_image' => $player?->profile_image ? asset('storage/' . $player->profile_image) : null,
+                'profile_image' => app_image_url($player?->profile_image),
                 'gender' => $player?->gender,
                 'playing_level' => ($player && strtolower($player->playing_level ?? '') === 'advanced') ? 'professional' : $player?->playing_level,
                 'dob' => $dob instanceof \Carbon\Carbon ? $dob->toDateString() : (is_string($dob) ? $dob : null),

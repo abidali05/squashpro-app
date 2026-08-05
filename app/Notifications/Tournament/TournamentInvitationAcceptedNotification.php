@@ -12,7 +12,7 @@ class TournamentInvitationAcceptedNotification extends Notification implements S
 {
     use Queueable;
 
-    public function __construct(private readonly Tournament $tournament)
+    public function __construct(private readonly Tournament $tournament, private readonly ?\App\Models\User $invitedClub = null)
     {
         $this->onQueue('notifications');
     }
@@ -24,8 +24,8 @@ class TournamentInvitationAcceptedNotification extends Notification implements S
 
     public function toArray(object $notifiable): array
     {
-        $opponentName = $this->tournament->opponentClub?->club_name
-            ?? $this->tournament->opponentClub?->name
+        $opponentName = $this->invitedClub?->club_name
+            ?? $this->invitedClub?->name
             ?? 'The invited club';
 
         return [
@@ -38,7 +38,7 @@ class TournamentInvitationAcceptedNotification extends Notification implements S
             ),
             'data' => [
                 'tournament_id' => $this->tournament->id,
-                'invited_club_id' => $this->tournament->opponent_club_id,
+                'invited_club_id' => $this->invitedClub?->id,
             ],
         ];
     }

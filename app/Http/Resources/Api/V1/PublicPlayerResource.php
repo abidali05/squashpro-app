@@ -13,7 +13,7 @@ class PublicPlayerResource extends JsonResource
         return [
             'id' => $this->id,
             'full_name' => $this->name,
-            'profile_image_url' => $this->profile_image ? (str_starts_with($this->profile_image, 'http') ? $this->profile_image : Storage::disk('public')->url($this->profile_image)) : null,
+            'profile_image_url' => app_image_url($this->profile_image),
         ];
     }
 }

@@ -123,6 +123,13 @@ class TournamentModuleFullFlowTest extends TestCase
             'status' => 'pending',
         ]);
 
+        \App\Models\TournamentInvitation::create([
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->club2->id,
+            'status' => 'pending',
+            'invited_at' => now(),
+        ]);
+
         // 2. Reject by unauthorized club (club3) -> 403
         $responseForbidden = $this->patchJson(
             "/api/v1/club/tournaments/{$tournament->id}/invitation",
@@ -144,6 +151,11 @@ class TournamentModuleFullFlowTest extends TestCase
         $this->assertDatabaseHas('tournaments', [
             'id' => $tournament->id,
             'status' => 'soft_accepted',
+        ]);
+        $this->assertDatabaseHas('tournament_invitations', [
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->club2->id,
+            'status' => 'accepted',
         ]);
         $this->assertDatabaseHas('audit_logs', [
             'actor_id' => $this->club2->id,
@@ -847,4 +859,135 @@ class TournamentModuleFullFlowTest extends TestCase
         )->assertStatus(422)
          ->assertJsonPath('error_code', 'VALIDATION_ERROR');
     }
+
+    public function test_tournament_invitation_status_is_dynamic_per_club(): void
+    {
+        // Create a tournament inviting club2 and club3
+        $tournament = Tournament::create([
+            'club_id' => $this->club1->id,
+            'opponent_club_id' => [$this->club2->id, $this->club3->id],
+            'name' => 'Dynamic Status test',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-45',
+            'maximum_players' => 10,
+            'status' => 'pending',
+        ]);
+
+        \App\Models\TournamentInvitation::create([
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->club2->id,
+            'status' => 'pending',
+            'invited_at' => now(),
+        ]);
+
+        \App\Models\TournamentInvitation::create([
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->club3->id,
+            'status' => 'pending',
+            'invited_at' => now(),
+        ]);
+
+        // Club 2 accepts the invitation
+        $this->patchJson(
+            "/api/v1/club/tournaments/{$tournament->id}/invitation",
+            ['decision' => 'ACCEPT'],
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+
+        // Get details as club2 (status should be soft_accepted)
+        $responseClub2 = $this->getJson(
+            "/api/v1/club/tournaments",
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+        
+        $tournamentsClub2 = $responseClub2->json('data.tournaments');
+        $tourClub2 = collect($tournamentsClub2)->firstWhere('id', $tournament->id);
+        $this->assertNotNull($tourClub2);
+        $this->assertEquals('accepted', $tourClub2['status']);
+
+        // Get details as club3 (status should be pending)
+        $responseClub3 = $this->getJson(
+            "/api/v1/club/tournaments",
+            ['Authorization' => "Bearer {$this->token3}"]
+        )->assertOk();
+        
+        $tournamentsClub3 = $responseClub3->json('data.tournaments');
+        $tourClub3 = collect($tournamentsClub3)->firstWhere('id', $tournament->id);
+        $this->assertNotNull($tourClub3);
+        $this->assertEquals('pending', $tourClub3['status']);
+
+        // Filter list by status=pending for club 2 (should NOT return this tournament)
+        $responseFilterClub2 = $this->getJson(
+            "/api/v1/club/tournaments?status=pending",
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+        $idsClub2 = collect($responseFilterClub2->json('data.tournaments'))->pluck('id')->toArray();
+        $this->assertNotContains($tournament->id, $idsClub2);
+
+        // Filter list by status=pending for club 3 (should return this tournament)
+        $responseFilterClub3 = $this->getJson(
+            "/api/v1/club/tournaments?status=pending",
+            ['Authorization' => "Bearer {$this->token3}"]
+        )->assertOk();
+        $idsClub3 = collect($responseFilterClub3->json('data.tournaments'))->pluck('id')->toArray();
+        $this->assertContains($tournament->id, $idsClub3);
+
+        // Get details as host (club1) (should see 'pending' instead of 'soft_accepted' to avoid confusion)
+        $responseHost = $this->getJson(
+            "/api/v1/club/tournaments",
+            ['Authorization' => "Bearer {$this->token1}"]
+        )->assertOk();
+        $tournamentsHost = $responseHost->json('data.tournaments');
+        $tourHost = collect($tournamentsHost)->firstWhere('id', $tournament->id);
+        $this->assertNotNull($tourHost);
+        $this->assertEquals('pending', $tourHost['status']);
+    }
+
+    public function test_tournament_invitation_status_defaults_to_pending_when_record_missing(): void
+    {
+        // Create a tournament inviting club2
+        // We do NOT create a row in the tournament_invitations table (simulating legacy data)
+        $tournament = Tournament::create([
+            'club_id' => $this->club1->id,
+            'opponent_club_id' => [$this->club2->id],
+            'name' => 'Legacy Missing Invitation Test',
+            'format' => 'Knockout',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '15-45',
+            'maximum_players' => 10,
+            'status' => 'soft_accepted', // overall status has accepted by some other means
+        ]);
+
+        // Get details as club2
+        $response = $this->getJson(
+            "/api/v1/club/tournaments",
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+        
+        $tList = $response->json('data.tournaments');
+        $tour = collect($tList)->firstWhere('id', $tournament->id);
+        $this->assertNotNull($tour);
+        // It must default to pending!
+        $this->assertEquals('pending', $tour['status']);
+
+        // Check if filter status=pending returns it
+        $responseFilter = $this->getJson(
+            "/api/v1/club/tournaments?status=pending",
+            ['Authorization' => "Bearer {$this->token2}"]
+        )->assertOk();
+        $ids = collect($responseFilter->json('data.tournaments'))->pluck('id')->toArray();
+        $this->assertContains($tournament->id, $ids);
+    }
 }
+

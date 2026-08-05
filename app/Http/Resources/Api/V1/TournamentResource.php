@@ -36,12 +36,33 @@ class TournamentResource extends JsonResource
             'maximum_players' => $this->maximum_players,
             'registered_players_count' => $registered,
             'players_count' => $registered.'/'.$allowed,
-            'status' => $this->status,
+            'status' => (function() use ($authId) {
+                // Determine if the authenticated user is an opponent
+                $opponentIds = (array) ($this->opponent_club_id ?? []);
+                $isOpponent = $authId && in_array((int)$authId, array_map('intval', $opponentIds), true);
+
+                if ($isOpponent) {
+                    $invitation = \App\Models\TournamentInvitation::where('tournament_id', $this->id)
+                        ->where('invited_club_id', $authId)
+                        ->first();
+                    return $invitation ? $invitation->status : 'pending';
+                }
+
+                // If they are the host/creator:
+                if ($authId && $this->club_id === (int)$authId) {
+                    // If overall tournament status is 'soft_accepted', return 'pending' to avoid confusion!
+                    if ($this->status === 'soft_accepted') {
+                        return 'pending';
+                    }
+                }
+
+                return $this->status;
+            })(),
             'rules' => $this->rules,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
             'is_creator' => $this->club_id === $authId,
-            'is_opponent' => $this->opponent_club_id === $authId,
+            'is_opponent' => in_array((int)$authId, (array)($this->opponent_club_id ?? []), true),
             'scorers' => $this->tournament_type === 'CLUB_TO_CLUB' ? $this->scorers->map(function ($u) {
                 return [
                     'id' => $u->id,
