@@ -43,7 +43,7 @@ class Tournament extends Model
             'maximum_players' => 'integer',
             'registered_players_count' => 'integer',
             'player_level' => 'array',
-            'opponent_club_id' => 'integer',
+            'opponent_club_id' => 'array',
             'created_by_admin' => 'boolean',
         ];
     }

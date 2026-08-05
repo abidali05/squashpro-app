@@ -140,7 +140,11 @@ class TournamentManagementController extends Controller
             }
         }
 
+        $opponent = $validated['opponent_club_id'] ?? null;
+        $opponentArray = $opponent ? [(int)$opponent] : null;
+
         Tournament::create(array_merge($validated, [
+            'opponent_club_id' => $opponentArray,
             'tournament_image' => $imagePath,
             'allowed_player' => $validated['maximum_players'],
             'status' => 'open',
@@ -201,7 +205,11 @@ class TournamentManagementController extends Controller
             }
         }
 
+        $opponent = $validated['opponent_club_id'] ?? null;
+        $opponentArray = $opponent ? [(int)$opponent] : null;
+
         $tournament->update(array_merge($validated, [
+            'opponent_club_id' => $opponentArray,
             'tournament_image' => $imagePath,
             'allowed_player' => $validated['maximum_players'],
         ]));

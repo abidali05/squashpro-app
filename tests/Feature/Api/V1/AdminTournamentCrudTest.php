@@ -170,12 +170,10 @@ class AdminTournamentCrudTest extends TestCase
             ]);
 
         $response->assertRedirect(route('admin.tournaments.index'));
-        $this->assertDatabaseHas('tournaments', [
-            'id' => $tournament->id,
-            'name' => 'Tournament Updated Name',
-            'opponent_club_id' => $anotherClub->id,
-            'status' => 'confirmed',
-        ]);
+        $tournament->refresh();
+        $this->assertEquals('Tournament Updated Name', $tournament->name);
+        $this->assertEquals([$anotherClub->id], $tournament->opponent_club_id);
+        $this->assertEquals('confirmed', $tournament->status);
     }
 
     public function test_admin_can_delete_tournament(): void

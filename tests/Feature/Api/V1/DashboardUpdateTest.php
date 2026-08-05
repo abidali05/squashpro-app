@@ -71,7 +71,7 @@ class DashboardUpdateTest extends TestCase
         // Seed 1 pending tournament invitation (club2 inviting club1)
         Tournament::create([
             'club_id' => $this->club2->id,
-            'opponent_club_id' => $this->club1->id,
+            'opponent_club_id' => [$this->club1->id],
             'name' => 'Inter-Club Cup',
             'format' => 'Knockout',
             'start_date' => '2026-08-20',

@@ -13,7 +13,7 @@ class PublicClubResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->club_name ?? $this->name,
-            'logo_url' => $this->club_logo ? (str_starts_with($this->club_logo, 'http') ? $this->club_logo : Storage::disk('public')->url($this->club_logo)) : null,
+            'logo_url' => app_image_url($this->club_logo),
             'city' => $this->city,
             'address' => $this->address,
             'status' => $this->status,

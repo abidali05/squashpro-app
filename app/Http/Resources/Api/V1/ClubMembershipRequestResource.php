@@ -27,7 +27,7 @@ class ClubMembershipRequestResource extends JsonResource
                 'full_name' => $player->name ?? '',
                 'email' => $player->email ?? '',
                 'phone' => $player->phone ?? '',
-                'profile_image_url' => $player && $player->profile_image ? (str_starts_with($player->profile_image, 'http') ? $player->profile_image : Storage::disk('public')->url($player->profile_image)) : null,
+                'profile_image_url' => $player ? app_image_url($player->profile_image) : null,
             ],
         ];
     }

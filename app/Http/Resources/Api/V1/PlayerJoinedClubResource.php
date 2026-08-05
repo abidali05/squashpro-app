@@ -20,7 +20,7 @@ class PlayerJoinedClubResource extends JsonResource
         return [
             'club_id' => $this->club_id,
             'club_name' => $club->club_name ?? $club->name,
-            'club_logo' => $club->club_logo ? (str_starts_with($club->club_logo, 'http') ? $club->club_logo : Storage::disk('public')->url($club->club_logo)) : null,
+            'club_logo' => app_image_url($club->club_logo),
             'location' => $club->address ?? ($club->cityRelation->name ?? $club->city),
             'address' => $club->address,
             'city' => $club->cityRelation->name ?? $club->city,
