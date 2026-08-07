@@ -34,16 +34,61 @@
     </div>
 
     <div class="col-12 col-md-6" id="opponent_club_container">
-        <label class="form-label">Opponent Club <span class="text-danger" id="opponent_asterisk">*</span></label>
-        <select name="opponent_club_id" id="opponent_club_id" class="form-select @error('opponent_club_id') is-invalid @enderror">
-            <option value="">Select Opponent Club</option>
+        <label class="form-label">Opponent Clubs <span class="text-danger" id="opponent_asterisk">*</span></label>
+        <select name="opponent_club_id[]" id="opponent_club_id" class="form-select @error('opponent_club_id') is-invalid @enderror" multiple size="5">
             @foreach($clubs as $club)
-                <option value="{{ $club->id }}" @selected(old('opponent_club_id', is_array($tournament?->opponent_club_id) ? ($tournament->opponent_club_id[0] ?? '') : ($tournament?->opponent_club_id ?? '')) == $club->id)>
+                @php
+                    $selected = false;
+                    $oldOpponents = old('opponent_club_id', $tournament?->opponent_club_id ?? []);
+                    if (is_array($oldOpponents)) {
+                        $selected = in_array($club->id, array_map('intval', $oldOpponents), true);
+                    } else {
+                        $selected = (int)$oldOpponents == $club->id;
+                    }
+                @endphp
+                <option value="{{ $club->id }}" @selected($selected)>
                     {{ $club->club_name ?? $club->name }} ({{ $club->city ?? 'No City' }})
                 </option>
             @endforeach
         </select>
+        <small class="text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple clubs.</small>
         @error('opponent_club_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-12 col-md-6" id="scorer_container">
+        <label class="form-label">Tournament Scorers</label>
+        <select name="scorer_ids[]" id="scorer_ids" class="form-select @error('scorer_ids') is-invalid @enderror" multiple size="5">
+            @foreach($scorers as $scorer)
+                @php
+                    $selected = false;
+                    $oldScorers = old('scorer_ids', isset($tournament) ? $tournament->scorers->pluck('id')->toArray() : []);
+                    $selected = in_array($scorer->id, array_map('intval', $oldScorers), true);
+                @endphp
+                <option value="{{ $scorer->id }}" @selected($selected)>
+                    {{ $scorer->name }} ({{ $scorer->email }})
+                </option>
+            @endforeach
+        </select>
+        <small class="text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple scorers.</small>
+        @error('scorer_ids')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-12 col-md-6" id="umpire_container">
+        <label class="form-label">Tournament Umpires</label>
+        <select name="umpire_ids[]" id="umpire_ids" class="form-select @error('umpire_ids') is-invalid @enderror" multiple size="5">
+            @foreach($umpires as $umpire)
+                @php
+                    $selected = false;
+                    $oldUmpires = old('umpire_ids', isset($tournament) ? $tournament->umpires->pluck('id')->toArray() : []);
+                    $selected = in_array($umpire->id, array_map('intval', $oldUmpires), true);
+                @endphp
+                <option value="{{ $umpire->id }}" @selected($selected)>
+                    {{ $umpire->name }} ({{ $umpire->email }})
+                </option>
+            @endforeach
+        </select>
+        <small class="text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple umpires.</small>
+        @error('umpire_ids')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 
     <div class="col-12 col-md-6">
@@ -159,24 +204,94 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const typeSelect = document.getElementById('tournament_type');
-        const opponentContainer = document.getElementById('opponent_club_container');
-        const opponentSelect = document.getElementById('opponent_club_id');
-
-        function toggleOpponent() {
-            if (typeSelect.value === 'CLUB_TO_CLUB') {
-                opponentContainer.style.display = 'block';
-                opponentSelect.setAttribute('required', 'required');
-            } else {
-                opponentContainer.style.display = 'none';
-                opponentSelect.removeAttribute('required');
-                opponentSelect.value = '';
-            }
+@push('my-styles')
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        .select2-container--default .select2-selection--multiple {
+            border: 1px solid #d9dee3;
+            border-radius: 0.375rem;
+            padding: 0.15rem 0.5rem;
+            min-height: 38px;
+            background-color: #fff;
         }
+        .select2-container--default.select2-container--focus .select2-selection--multiple {
+            border-color: #8592a3;
+            outline: 0;
+            box-shadow: 0 0 0.25rem 0.05rem rgba(133, 146, 163, 0.25);
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #f0f2f4;
+            border: 1px solid #d9dee3;
+            border-radius: 0.25rem;
+            color: #566a7f;
+            font-size: 0.8125rem;
+            padding: 2px 6px;
+            margin-top: 4px;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: #ff3e1d;
+            margin-right: 5px;
+            border: none;
+            background: none;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+            background: none;
+            color: #e6381a;
+        }
+        .select2-container--default .select2-search--inline .select2-search__field {
+            margin-top: 6px;
+        }
+    </style>
+@endpush
 
-        typeSelect.addEventListener('change', toggleOpponent);
-        toggleOpponent();
-    });
-</script>
+@push('my-script')
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2 on opponent_club_id, scorer_ids, and umpire_ids
+            const $opponentSelect = $('#opponent_club_id').select2({
+                placeholder: "Select Opponent Clubs",
+                allowClear: true,
+                width: '100%'
+            });
+            const $scorerSelect = $('#scorer_ids').select2({
+                placeholder: "Select Scorers",
+                allowClear: true,
+                width: '100%'
+            });
+            const $umpireSelect = $('#umpire_ids').select2({
+                placeholder: "Select Umpires",
+                allowClear: true,
+                width: '100%'
+            });
+
+            const typeSelect = document.getElementById('tournament_type');
+            const opponentContainer = document.getElementById('opponent_club_container');
+            const opponentSelectRaw = document.getElementById('opponent_club_id');
+            const scorerContainer = document.getElementById('scorer_container');
+            const umpireContainer = document.getElementById('umpire_container');
+
+            function toggleOpponent() {
+                if (typeSelect.value === 'CLUB_TO_CLUB') {
+                    opponentContainer.style.display = 'block';
+                    opponentSelectRaw.setAttribute('required', 'required');
+                    scorerContainer.style.display = 'block';
+                    umpireContainer.style.display = 'block';
+                } else {
+                    opponentContainer.style.display = 'none';
+                    opponentSelectRaw.removeAttribute('required');
+                    scorerContainer.style.display = 'none';
+                    umpireContainer.style.display = 'none';
+                    $opponentSelect.val(null).trigger('change');
+                    $scorerSelect.val(null).trigger('change');
+                    $umpireSelect.val(null).trigger('change');
+                }
+            }
+
+            typeSelect.addEventListener('change', toggleOpponent);
+            toggleOpponent();
+        });
+    </script>
+@endpush

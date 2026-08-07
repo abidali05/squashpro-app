@@ -1042,14 +1042,59 @@ class ClubService
             $this->apiError('You are not authorized to respond to this invitation.', 'FORBIDDEN', 403);
         }
 
-        // Verify that current status is pending
-        if ($tournament->status !== 'pending') {
+        // Get invitation record for the authenticated club
+        $invitation = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('invited_club_id', $club->id)
+            ->first();
+
+        // If invitation exists and status is not pending, it means they have already responded
+        if ($invitation && $invitation->status !== 'pending') {
             $this->apiError('Invitation response already finalized.', 'ALREADY_RESPONDED', 409);
         }
 
-        $newStatus = $decision === 'ACCEPT' ? 'soft_accepted' : 'rejected';
+        $newStatus = $tournament->status; // Default to current status
 
-        DB::transaction(function () use ($tournament, $club, $newStatus, $decision) {
+        if ($decision === 'ACCEPT') {
+            $newStatus = 'soft_accepted';
+        } else {
+            // It's a rejection.
+            $opponentIds = array_map('intval', (array) ($tournament->opponent_club_id ?? []));
+            
+            // Get other invitations
+            $otherInvitations = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+                ->where('invited_club_id', '!=', $club->id)
+                ->get();
+            
+            // Check if all other opponents have also rejected
+            $allOthersRejected = true;
+            foreach ($opponentIds as $oppId) {
+                if ($oppId === (int) $club->id) {
+                    continue;
+                }
+                $otherInv = $otherInvitations->firstWhere('invited_club_id', $oppId);
+                if (!$otherInv || $otherInv->status !== 'rejected') {
+                    $allOthersRejected = false;
+                    break;
+                }
+            }
+
+            if ($allOthersRejected) {
+                $newStatus = 'rejected';
+            } else {
+                $anyOtherAccepted = false;
+                foreach ($otherInvitations as $otherInv) {
+                    if ($otherInv->status === 'accepted') {
+                        $anyOtherAccepted = true;
+                        break;
+                    }
+                }
+                $newStatus = $anyOtherAccepted ? 'soft_accepted' : 'pending';
+            }
+        }
+
+        $beforeStatus = $tournament->status;
+
+        DB::transaction(function () use ($tournament, $club, $newStatus, $decision, $beforeStatus) {
             $tournament->status = $newStatus;
             $tournament->save();
 
@@ -1070,7 +1115,7 @@ class ClubService
                 action: strtolower($decision) . '_tournament_invitation',
                 entityType: Tournament::class,
                 entityId: $tournament->id,
-                before: ['status' => 'pending'],
+                before: ['status' => $beforeStatus],
                 after: ['status' => $newStatus]
             );
 
@@ -1670,12 +1715,8 @@ class ClubService
 
     public function getClubOfficials(User $club): array
     {
-        $memberPlayerIds = \App\Models\ClubMembership::where('club_id', $club->id)
-            ->where('status', \App\Models\ClubMembership::STATUS_APPROVED)
-            ->pluck('player_id')
-            ->all();
-
-        $scorers = User::whereIn('id', $memberPlayerIds)
+        $scorers = User::where('role', 'player')
+            ->where('status', 'active')
             ->where('are_you_scorer', true)
             ->get()
             ->map(function ($u) {
@@ -1692,7 +1733,8 @@ class ClubService
             })
             ->all();
 
-        $umpires = User::whereIn('id', $memberPlayerIds)
+        $umpires = User::where('role', 'player')
+            ->where('status', 'active')
             ->where('are_you_umpire', true)
             ->get()
             ->map(function ($u) {
