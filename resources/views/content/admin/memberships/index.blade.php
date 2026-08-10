@@ -35,6 +35,8 @@
         ['label' => 'Player',            'sortable' => false],
         ['label' => 'Club',              'sortable' => false],
         ['label' => 'Membership Number', 'field' => 'membership_number', 'sortable' => true],
+        ['label' => 'Type',              'sortable' => false],
+        ['label' => 'Expiry Date',       'sortable' => false],
         ['label' => 'Verification Mode', 'sortable' => false],
         ['label' => 'Status',            'field' => 'status', 'sortable' => true],
         ['label' => 'Approved At',       'field' => 'created_at', 'sortable' => true],
@@ -64,6 +66,14 @@
                 <span class="fw-semibold">{{ $membership->club?->club_name ?? $membership->club?->name ?? '—' }}</span>
             </td>
             <td><code>{{ $membership->membership_number }}</code></td>
+            <td><span class="text-capitalize">{{ $membership->membership_type ?? 'Permanent' }}</span></td>
+            <td>
+                @if(($membership->membership_type ?? 'permanent') === 'temporary' && $membership->membership_expiry_date)
+                    <span class="text-danger fw-semibold">{{ $membership->membership_expiry_date->format('Y-m-d') }}</span>
+                @else
+                    <span class="text-muted">—</span>
+                @endif
+            </td>
             <td><span class="text-capitalize">{{ str_replace('_', ' ', $membership->verification_mode ?? '—') }}</span></td>
             <td>
                 @php

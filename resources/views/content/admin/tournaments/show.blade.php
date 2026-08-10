@@ -76,6 +76,134 @@
                 </div>
             </div>
 
+            @if($tournament->tournament_type === 'CLUB_TO_CLUB')
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Opponent Club Invitations</h6>
+                        <span class="badge bg-secondary">{{ $tournament->invitations->count() }} Invited</span>
+                    </div>
+                    <div class="card-body">
+                        @if($tournament->invitations->isEmpty())
+                            <div class="text-center py-3 text-muted">
+                                <i class="mdi mdi-email-open-outline d-block mb-1" style="font-size: 24px;"></i>
+                                No club invitations sent.
+                            </div>
+                        @else
+                            <div class="table-responsive">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Opponent Club</th>
+                                            <th>City</th>
+                                            <th>Invitation Status</th>
+                                            <th>Invited At</th>
+                                            <th>Responded At</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($tournament->invitations as $invite)
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        @if($invite->invitedClub?->club_logo)
+                                                            <img src="{{ asset('storage/' . $invite->invitedClub->club_logo) }}" alt="{{ $invite->invitedClub->club_name }}" class="rounded-circle" style="width: 32px; height: 32px; object-fit: cover;">
+                                                        @else
+                                                            <div class="rounded-circle bg-label-info d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-size: 14px;">
+                                                                <i class="mdi mdi-domain"></i>
+                                                            </div>
+                                                        @endif
+                                                        <div>
+                                                            <span class="fw-semibold d-block">{{ $invite->invitedClub?->club_name ?? $invite->invitedClub?->name ?? '—' }}</span>
+                                                            <small class="text-muted">{{ $invite->invitedClub?->email ?? '—' }}</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>{{ $invite->invitedClub?->city ?? '—' }}</td>
+                                                <td>
+                                                    @php
+                                                        $invStatusMap = [
+                                                            'accepted' => 'bg-label-success',
+                                                            'pending' => 'bg-label-warning',
+                                                            'rejected' => 'bg-label-danger',
+                                                        ];
+                                                        $invBadge = $invStatusMap[$invite->status] ?? 'bg-label-secondary';
+                                                    @endphp
+                                                    <span class="badge {{ $invBadge }}">{{ ucfirst($invite->status) }}</span>
+                                                </td>
+                                                <td><span class="text-muted small">{{ $invite->invited_at?->format('Y-m-d H:i') ?? '—' }}</span></td>
+                                                <td><span class="text-muted small">{{ $invite->responded_at?->format('Y-m-d H:i') ?? '—' }}</span></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
+            @if($tournament->tournament_type === 'CLUB_TO_CLUB')
+                <div class="card mb-4">
+                    <div class="card-header"><h6 class="mb-0">Assigned Match Officials</h6></div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <p class="text-muted small mb-2 fw-semibold">Scorers</p>
+                                @if($tournament->scorers->isEmpty())
+                                    <p class="text-muted small">No scorers assigned.</p>
+                                @else
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach($tournament->scorers as $scorer)
+                                            <li class="mb-2">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    @if($scorer->profile_image)
+                                                        <img src="{{ asset('storage/' . $scorer->profile_image) }}" alt="{{ $scorer->name }}" class="rounded-circle" style="width: 28px; height: 28px; object-fit: cover;">
+                                                    @else
+                                                        <div class="rounded-circle bg-label-secondary d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 12px;">
+                                                            <i class="mdi mdi-account"></i>
+                                                        </div>
+                                                    @endif
+                                                    <div>
+                                                        <span class="fw-semibold small d-block">{{ $scorer->name }}</span>
+                                                        <small class="text-muted" style="font-size: 11px;">{{ $scorer->email }}</small>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted small mb-2 fw-semibold">Umpires</p>
+                                @if($tournament->umpires->isEmpty())
+                                    <p class="text-muted small">No umpires assigned.</p>
+                                @else
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach($tournament->umpires as $umpire)
+                                            <li class="mb-2">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    @if($umpire->profile_image)
+                                                        <img src="{{ asset('storage/' . $umpire->profile_image) }}" alt="{{ $umpire->name }}" class="rounded-circle" style="width: 28px; height: 28px; object-fit: cover;">
+                                                    @else
+                                                        <div class="rounded-circle bg-label-secondary d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 12px;">
+                                                            <i class="mdi mdi-account"></i>
+                                                        </div>
+                                                    @endif
+                                                    <div>
+                                                        <span class="fw-semibold small d-block">{{ $umpire->name }}</span>
+                                                        <small class="text-muted" style="font-size: 11px;">{{ $umpire->email }}</small>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <div class="card mb-4">
                 <div class="card-header"><h6 class="mb-0">Rules</h6></div>
                 <div class="card-body">

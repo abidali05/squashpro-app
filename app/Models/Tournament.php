@@ -88,4 +88,14 @@ class Tournament extends Model
     {
         return $this->belongsToMany(User::class, 'tournament_umpires', 'tournament_id', 'user_id')->withTimestamps();
     }
+
+    public function groups(): HasMany
+    {
+        return $this->hasMany(TournamentGroup::class, 'tournament_id');
+    }
+
+    public function fixtures(): HasMany
+    {
+        return $this->hasMany(TournamentFixture::class, 'tournament_id');
+    }
 }

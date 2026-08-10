@@ -213,4 +213,85 @@ class AdminTournamentCrudTest extends TestCase
             ->post('/admin/tournaments', []);
         $response->assertForbidden();
     }
+
+    public function test_admin_creates_tournament_with_multiple_opponents_syncs_invitations(): void
+    {
+        $club2 = User::factory()->create(['role' => 'club', 'status' => 'active']);
+        $club3 = User::factory()->create(['role' => 'club', 'status' => 'active']);
+
+        $response = $this->actingAs($this->admin)
+            ->post('/admin/tournaments', [
+                'club_id' => $this->club->id,
+                'name' => 'Admin C2C Tournament',
+                'format' => 'knockout',
+                'start_date' => '2026-08-20',
+                'end_date' => '2026-08-22',
+                'registration_deadline' => '2026-08-15 12:00:00',
+                'entry_fees' => 1000,
+                'prize_pool' => 30000,
+                'maximum_players' => 16,
+                'tournament_type' => 'CLUB_TO_CLUB',
+                'opponent_club_id' => [$club2->id, $club3->id],
+                'gender' => 'OPEN',
+                'player_level' => ['BEGINNER'],
+                'age_group' => '18-35',
+                'rules' => 'Rule 1',
+            ]);
+
+        $response->assertRedirect(route('admin.tournaments.index'));
+        
+        $tournament = Tournament::where('name', 'Admin C2C Tournament')->first();
+        $this->assertNotNull($tournament);
+        $this->assertEquals([$club2->id, $club3->id], $tournament->opponent_club_id);
+
+        // Verify invitations are created
+        $this->assertDatabaseHas('tournament_invitations', [
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $club2->id,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('tournament_invitations', [
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $club3->id,
+            'status' => 'pending',
+        ]);
+
+        // Now update it and remove club3, but add club4
+        $club4 = User::factory()->create(['role' => 'club', 'status' => 'active']);
+        $response = $this->actingAs($this->admin)
+            ->put("/admin/tournaments/{$tournament->id}", [
+                'club_id' => $this->club->id,
+                'name' => 'Admin C2C Tournament Updated',
+                'format' => 'knockout',
+                'start_date' => '2026-08-20',
+                'end_date' => '2026-08-22',
+                'registration_deadline' => '2026-08-15 12:00:00',
+                'entry_fees' => 1000,
+                'prize_pool' => 30000,
+                'maximum_players' => 16,
+                'tournament_type' => 'CLUB_TO_CLUB',
+                'opponent_club_id' => [$club2->id, $club4->id],
+                'gender' => 'OPEN',
+                'player_level' => ['BEGINNER'],
+                'age_group' => '18-35',
+                'status' => 'open',
+            ]);
+
+        $response->assertRedirect(route('admin.tournaments.index'));
+        $tournament->refresh();
+        $this->assertEquals([$club2->id, $club4->id], $tournament->opponent_club_id);
+
+        // Club 3 invitation should be deleted
+        $this->assertDatabaseMissing('tournament_invitations', [
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $club3->id,
+        ]);
+
+        // Club 4 invitation should be created
+        $this->assertDatabaseHas('tournament_invitations', [
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $club4->id,
+            'status' => 'pending',
+        ]);
+    }
 }

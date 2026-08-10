@@ -300,7 +300,7 @@ class PlayerTournamentOfficialChangesTest extends TestCase
         ]);
     }
 
-    public function test_get_club_officials_returns_scorers_and_umpires_who_are_members(): void
+    public function test_get_club_officials_returns_all_scorers_and_umpires_across_platform(): void
     {
         $scorerPlayer = User::factory()->create([
             'role' => 'player',
@@ -348,8 +348,11 @@ class PlayerTournamentOfficialChangesTest extends TestCase
         $response->assertOk();
         
         $data = $response->json('data');
-        $this->assertCount(1, $data['scorers']);
-        $this->assertEquals('Scorer Member', $data['scorers'][0]['full_name']);
+        $this->assertCount(2, $data['scorers']); // Both Member and Non-Member scorers are returned
+        
+        $scorerNames = collect($data['scorers'])->pluck('full_name')->toArray();
+        $this->assertContains('Scorer Member', $scorerNames);
+        $this->assertContains('Scorer NonMember', $scorerNames);
 
         $this->assertCount(1, $data['umpires']);
         $this->assertEquals('Umpire Member', $data['umpires'][0]['full_name']);

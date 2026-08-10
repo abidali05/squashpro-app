@@ -1042,14 +1042,59 @@ class ClubService
             $this->apiError('You are not authorized to respond to this invitation.', 'FORBIDDEN', 403);
         }
 
-        // Verify that current status is pending
-        if ($tournament->status !== 'pending') {
+        // Get invitation record for the authenticated club
+        $invitation = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('invited_club_id', $club->id)
+            ->first();
+
+        // If invitation exists and status is not pending, it means they have already responded
+        if ($invitation && $invitation->status !== 'pending') {
             $this->apiError('Invitation response already finalized.', 'ALREADY_RESPONDED', 409);
         }
 
-        $newStatus = $decision === 'ACCEPT' ? 'soft_accepted' : 'rejected';
+        $newStatus = $tournament->status; // Default to current status
 
-        DB::transaction(function () use ($tournament, $club, $newStatus, $decision) {
+        if ($decision === 'ACCEPT') {
+            $newStatus = 'soft_accepted';
+        } else {
+            // It's a rejection.
+            $opponentIds = array_map('intval', (array) ($tournament->opponent_club_id ?? []));
+            
+            // Get other invitations
+            $otherInvitations = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+                ->where('invited_club_id', '!=', $club->id)
+                ->get();
+            
+            // Check if all other opponents have also rejected
+            $allOthersRejected = true;
+            foreach ($opponentIds as $oppId) {
+                if ($oppId === (int) $club->id) {
+                    continue;
+                }
+                $otherInv = $otherInvitations->firstWhere('invited_club_id', $oppId);
+                if (!$otherInv || $otherInv->status !== 'rejected') {
+                    $allOthersRejected = false;
+                    break;
+                }
+            }
+
+            if ($allOthersRejected) {
+                $newStatus = 'rejected';
+            } else {
+                $anyOtherAccepted = false;
+                foreach ($otherInvitations as $otherInv) {
+                    if ($otherInv->status === 'accepted') {
+                        $anyOtherAccepted = true;
+                        break;
+                    }
+                }
+                $newStatus = $anyOtherAccepted ? 'soft_accepted' : 'pending';
+            }
+        }
+
+        $beforeStatus = $tournament->status;
+
+        DB::transaction(function () use ($tournament, $club, $newStatus, $decision, $beforeStatus) {
             $tournament->status = $newStatus;
             $tournament->save();
 
@@ -1070,7 +1115,7 @@ class ClubService
                 action: strtolower($decision) . '_tournament_invitation',
                 entityType: Tournament::class,
                 entityId: $tournament->id,
-                before: ['status' => 'pending'],
+                before: ['status' => $beforeStatus],
                 after: ['status' => $newStatus]
             );
 
@@ -1670,12 +1715,8 @@ class ClubService
 
     public function getClubOfficials(User $club): array
     {
-        $memberPlayerIds = \App\Models\ClubMembership::where('club_id', $club->id)
-            ->where('status', \App\Models\ClubMembership::STATUS_APPROVED)
-            ->pluck('player_id')
-            ->all();
-
-        $scorers = User::whereIn('id', $memberPlayerIds)
+        $scorers = User::where('role', 'player')
+            ->where('status', 'active')
             ->where('are_you_scorer', true)
             ->get()
             ->map(function ($u) {
@@ -1692,7 +1733,8 @@ class ClubService
             })
             ->all();
 
-        $umpires = User::whereIn('id', $memberPlayerIds)
+        $umpires = User::where('role', 'player')
+            ->where('status', 'active')
             ->where('are_you_umpire', true)
             ->get()
             ->map(function ($u) {
@@ -1712,6 +1754,349 @@ class ClubService
         return [
             'scorers' => $scorers,
             'umpires' => $umpires,
+        ];
+    }
+
+    public function storeFixtures(User $club, string $tournamentId, array $data): void
+    {
+        $tournament = Tournament::find($tournamentId);
+        if (!$tournament) {
+            $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
+        }
+
+        if ($tournament->club_id !== $club->id) {
+            $this->apiError('You are not authorized to store fixtures for this tournament.', 'FORBIDDEN', 403);
+        }
+
+        $format = $data['format'] ?? null;
+        if (!$format || strtolower($format) !== strtolower($tournament->format ?? '')) {
+            $this->apiError('Fixture format does not match tournament format.', 'VALIDATION_ERROR', 422);
+        }
+
+        // Extract participating clubs: Host + accepted opponents
+        $participatingClubIds = [$tournament->club_id];
+        $acceptedInvites = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->whereIn('status', ['accepted', 'soft_accepted'])
+            ->pluck('invited_club_id')
+            ->toArray();
+        $participatingClubIds = array_unique(array_map('intval', array_merge($participatingClubIds, $acceptedInvites)));
+
+        // Extract submitted roster (team players) per club
+        $teams = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)->get();
+        $rosters = [];
+        foreach ($teams as $t) {
+            $playerIds = \App\Models\TournamentTeamPlayer::where('team_id', $t->id)->pluck('player_id')->toArray();
+            $rosters[(int)$t->club_id] = array_map('intval', $playerIds);
+        }
+
+        if (strtolower($format) === 'league') {
+            $groupCount = $data['group_count'] ?? null;
+            if ($groupCount === null || !is_numeric($groupCount) || (int)$groupCount < 1) {
+                $this->apiError('League tournament requires group_count >= 1.', 'VALIDATION_ERROR', 422);
+            }
+
+            $groupsPayload = $data['groups'] ?? [];
+            if (!is_array($groupsPayload) || count($groupsPayload) !== (int)$groupCount) {
+                $this->apiError('Groups count does not match group_count.', 'VALIDATION_ERROR', 422);
+            }
+
+            if ((int)$groupCount === 1) {
+                if (($groupsPayload[0]['group_name'] ?? '') !== 'League') {
+                    $this->apiError('Single league group name must be "League".', 'VALIDATION_ERROR', 422);
+                }
+            }
+
+            $allocatedClubIds = [];
+            $groupSizes = [];
+            foreach ($groupsPayload as $groupPay) {
+                $grpClubIds = array_map('intval', (array)($groupPay['club_ids'] ?? []));
+                $groupSizes[] = count($grpClubIds);
+
+                foreach ($grpClubIds as $cId) {
+                    if (!in_array($cId, $participatingClubIds, true)) {
+                        $this->apiError("Club ID {$cId} is not a participating club in this tournament.", 'VALIDATION_ERROR', 422);
+                    }
+                    if (in_array($cId, $allocatedClubIds, true)) {
+                        $this->apiError("Club ID {$cId} belongs to multiple groups.", 'VALIDATION_ERROR', 422);
+                    }
+                    $allocatedClubIds[] = $cId;
+                }
+            }
+
+            if (count($allocatedClubIds) !== count($participatingClubIds)) {
+                $this->apiError('Every participating club must belong to exactly one group.', 'VALIDATION_ERROR', 422);
+            }
+
+            if (count(array_unique($groupSizes)) > 1) {
+                $this->apiError('League group sizes must be equal.', 'VALIDATION_ERROR', 422);
+            }
+        } else {
+            if (isset($data['group_count']) && $data['group_count'] !== null) {
+                $this->apiError('Knockout tournament must have null group_count.', 'VALIDATION_ERROR', 422);
+            }
+            if (isset($data['groups']) && !empty($data['groups'])) {
+                $this->apiError('Knockout tournament must have empty groups.', 'VALIDATION_ERROR', 422);
+            }
+        }
+
+        // Collect and validate fixtures
+        $allFixtures = [];
+        if (strtolower($format) === 'league') {
+            foreach (($data['groups'] ?? []) as $groupPay) {
+                $fixturesPay = $groupPay['fixtures'] ?? [];
+                if (!is_array($fixturesPay)) {
+                    continue;
+                }
+                foreach ($fixturesPay as $fixPay) {
+                    $allFixtures[] = [
+                        'group_name' => $groupPay['group_name'],
+                        'fixture' => $fixPay
+                    ];
+                }
+            }
+        } else {
+            $fixturesPay = $data['fixtures'] ?? [];
+            if (is_array($fixturesPay)) {
+                foreach ($fixturesPay as $fixPay) {
+                    $allFixtures[] = [
+                        'group_name' => null,
+                        'fixture' => $fixPay
+                    ];
+                }
+            }
+        }
+
+        foreach ($allFixtures as $fixData) {
+            $fix = $fixData['fixture'];
+            $homeClubId = (int)($fix['home_club_id'] ?? 0);
+            $awayClubId = (int)($fix['away_club_id'] ?? 0);
+            $round = $fix['round'] ?? null;
+
+            if (!$round) {
+                $this->apiError('Fixture is missing round details.', 'VALIDATION_ERROR', 422);
+            }
+
+            if (!in_array($homeClubId, $participatingClubIds, true) || !in_array($awayClubId, $participatingClubIds, true)) {
+                $this->apiError('Fixture club must be a participating club in this tournament.', 'VALIDATION_ERROR', 422);
+            }
+
+            $matchesPay = $fix['matches'] ?? [];
+            if (!is_array($matchesPay) || empty($matchesPay)) {
+                $this->apiError('Each fixture must contain at least one match.', 'VALIDATION_ERROR', 422);
+            }
+
+            $sequences = [];
+            foreach ($matchesPay as $matchPay) {
+                $seq = $matchPay['sequence'] ?? null;
+                $homePlayerId = (int)($matchPay['home_player_id'] ?? 0);
+                $awayPlayerId = (int)($matchPay['away_player_id'] ?? 0);
+
+                if ($seq === null || !is_numeric($seq)) {
+                    $this->apiError('Match sequence is missing or invalid.', 'VALIDATION_ERROR', 422);
+                }
+                if (in_array($seq, $sequences)) {
+                    $this->apiError("Duplicate match sequence {$seq} found in fixture.", 'VALIDATION_ERROR', 422);
+                }
+                $sequences[] = $seq;
+
+                $homeRoster = $rosters[$homeClubId] ?? [];
+                $awayRoster = $rosters[$awayClubId] ?? [];
+
+                if (!in_array($homePlayerId, $homeRoster, true)) {
+                    $this->apiError("Player ID {$homePlayerId} does not belong to the submitted roster of club {$homeClubId}.", 'VALIDATION_ERROR', 422);
+                }
+                if (!in_array($awayPlayerId, $awayRoster, true)) {
+                    $this->apiError("Player ID {$awayPlayerId} does not belong to the submitted roster of club {$awayClubId}.", 'VALIDATION_ERROR', 422);
+                }
+
+                if ($homePlayerId === $awayPlayerId) {
+                    $this->apiError('The same player cannot be assigned to both sides of a match.', 'VALIDATION_ERROR', 422);
+                }
+            }
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($tournament, $format, $data, $allFixtures) {
+            // Cascade on delete clean up
+            \App\Models\TournamentGroup::where('tournament_id', $tournament->id)->delete();
+            \App\Models\TournamentFixture::where('tournament_id', $tournament->id)->delete();
+
+            if (strtolower($format) === 'league') {
+                foreach (($data['groups'] ?? []) as $groupPay) {
+                    $group = \App\Models\TournamentGroup::create([
+                        'tournament_id' => $tournament->id,
+                        'name' => $groupPay['group_name']
+                    ]);
+
+                    $group->clubs()->sync($groupPay['club_ids'] ?? []);
+
+                    $fixturesPay = $groupPay['fixtures'] ?? [];
+                    foreach ($fixturesPay as $fixPay) {
+                        $fixture = \App\Models\TournamentFixture::create([
+                            'tournament_id' => $tournament->id,
+                            'group_id' => $group->id,
+                            'round' => $fixPay['round'],
+                            'home_club_id' => $fixPay['home_club_id'],
+                            'away_club_id' => $fixPay['away_club_id'],
+                            'status' => 'scheduled'
+                        ]);
+
+                        $matchesPay = $fixPay['matches'] ?? [];
+                        foreach ($matchesPay as $matchPay) {
+                            \App\Models\TournamentMatch::create([
+                                'fixture_id' => $fixture->id,
+                                'sequence' => $matchPay['sequence'],
+                                'home_player_id' => $matchPay['home_player_id'],
+                                'away_player_id' => $matchPay['away_player_id'],
+                                'status' => 'scheduled'
+                            ]);
+                        }
+                    }
+                }
+            } else {
+                $fixturesPay = $data['fixtures'] ?? [];
+                foreach ($fixturesPay as $fixPay) {
+                    $fixture = \App\Models\TournamentFixture::create([
+                        'tournament_id' => $tournament->id,
+                        'group_id' => null,
+                        'round' => $fixPay['round'],
+                        'home_club_id' => $fixPay['home_club_id'],
+                        'away_club_id' => $fixPay['away_club_id'],
+                        'status' => 'scheduled'
+                    ]);
+
+                    $matchesPay = $fixPay['matches'] ?? [];
+                    foreach ($matchesPay as $matchPay) {
+                        \App\Models\TournamentMatch::create([
+                            'fixture_id' => $fixture->id,
+                            'sequence' => $matchPay['sequence'],
+                            'home_player_id' => $matchPay['home_player_id'],
+                            'away_player_id' => $matchPay['away_player_id'],
+                            'status' => 'scheduled'
+                        ]);
+                    }
+                }
+            }
+        });
+    }
+
+    public function getFixtures(User $club, string $tournamentId): array
+    {
+        $tournament = Tournament::find($tournamentId);
+        if (!$tournament) {
+            $this->apiError('Tournament not found.', 'NOT_FOUND', 404);
+        }
+
+        $format = strtolower($tournament->format ?? '');
+        $groups = [];
+        $fixtures = [];
+
+        if ($format === 'league') {
+            $savedGroups = \App\Models\TournamentGroup::where('tournament_id', $tournament->id)
+                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.homeClub:id,club_name,name', 'fixtures.awayClub:id,club_name,name', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name'])
+                ->get();
+
+            foreach ($savedGroups as $g) {
+                $gClubs = [];
+                foreach ($g->clubs as $c) {
+                    $gClubs[] = [
+                        'club_id' => $c->id,
+                        'club_name' => $c->club_name ?? $c->name,
+                        'club_logo' => app_image_url($c->club_logo)
+                    ];
+                }
+
+                $gFixtures = [];
+                foreach ($g->fixtures as $f) {
+                    $fMatches = [];
+                    foreach ($f->matches as $m) {
+                        $fMatches[] = [
+                            'match_id' => $m->id,
+                            'sequence' => $m->sequence,
+                            'home_player' => [
+                                'player_id' => $m->home_player_id,
+                                'full_name' => $m->homePlayer?->name
+                            ],
+                            'away_player' => [
+                                'player_id' => $m->away_player_id,
+                                'full_name' => $m->awayPlayer?->name
+                            ],
+                            'status' => $m->status,
+                            'score' => $m->score,
+                            'winner_player_id' => $m->winner_player_id
+                        ];
+                    }
+
+                    $gFixtures[] = [
+                        'fixture_id' => $f->id,
+                        'round' => $f->round,
+                        'home_club' => [
+                            'club_id' => $f->home_club_id,
+                            'club_name' => $f->homeClub?->club_name ?? $f->homeClub?->name
+                        ],
+                        'away_club' => [
+                            'club_id' => $f->away_club_id,
+                            'club_name' => $f->awayClub?->club_name ?? $f->awayClub?->name
+                        ],
+                        'status' => $f->status,
+                        'matches' => $fMatches
+                    ];
+                }
+
+                $groups[] = [
+                    'group_name' => $g->name,
+                    'clubs' => $gClubs,
+                    'fixtures' => $gFixtures
+                ];
+            }
+        } else {
+            $savedFixtures = \App\Models\TournamentFixture::where('tournament_id', $tournament->id)
+                ->whereNull('group_id')
+                ->with(['homeClub:id,club_name,name', 'awayClub:id,club_name,name', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name'])
+                ->get();
+
+            foreach ($savedFixtures as $f) {
+                $fMatches = [];
+                foreach ($f->matches as $m) {
+                    $fMatches[] = [
+                        'match_id' => $m->id,
+                        'sequence' => $m->sequence,
+                        'home_player' => [
+                            'player_id' => $m->home_player_id,
+                            'full_name' => $m->homePlayer?->name
+                        ],
+                        'away_player' => [
+                            'player_id' => $m->away_player_id,
+                            'full_name' => $m->awayPlayer?->name
+                        ],
+                        'status' => $m->status,
+                        'score' => $m->score,
+                        'winner_player_id' => $m->winner_player_id
+                    ];
+                }
+
+                $fixtures[] = [
+                    'fixture_id' => $f->id,
+                    'round' => $f->round,
+                    'home_club' => [
+                        'club_id' => $f->home_club_id,
+                        'club_name' => $f->homeClub?->club_name ?? $f->homeClub?->name
+                    ],
+                    'away_club' => [
+                        'club_id' => $f->away_club_id,
+                        'club_name' => $f->awayClub?->club_name ?? $f->awayClub?->name
+                    ],
+                    'status' => $f->status,
+                    'matches' => $fMatches
+                ];
+            }
+        }
+
+        return [
+            'tournament_id' => (int) $tournament->id,
+            'format' => $format,
+            'group_count' => $format === 'league' ? count($groups) : null,
+            'groups' => $groups,
+            'fixtures' => $fixtures
         ];
     }
 

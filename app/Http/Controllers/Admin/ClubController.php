@@ -84,7 +84,13 @@ class ClubController extends Controller
     public function show(User $club): View
     {
         abort_if($club->role !== 'club', 404);
-        $club->load('courts');
+        $club->load([
+            'courts',
+            'clubMemberships.player:id,name,email,profile_image',
+            'clubMembershipRequests.player:id,name,email,profile_image',
+            'workingHoursSchedule',
+            'nonMemberWindows',
+        ]);
 
         return view('content.admin.clubs.show', compact('club'));
     }
