@@ -403,6 +403,54 @@ class ClubController extends Controller
         ]);
     }
 
+    public function storeFixtures(Request $request, string $tournament_id): JsonResponse
+    {
+        $validated = $request->validate([
+            'format' => ['required', 'string', 'in:league,knockout'],
+            'group_count' => ['nullable', 'integer', 'min:1'],
+            'groups' => ['nullable', 'array'],
+            'groups.*.group_name' => ['required_if:format,league', 'string', 'max:100'],
+            'groups.*.club_ids' => ['required_if:format,league', 'array'],
+            'groups.*.club_ids.*' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures' => ['nullable', 'array'],
+            'groups.*.fixtures.*.round' => ['required', 'string', 'max:100'],
+            'groups.*.fixtures.*.home_club_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.away_club_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches' => ['required', 'array', 'min:1'],
+            'groups.*.fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
+            'groups.*.fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+            
+            // Knockout fields
+            'fixtures' => ['nullable', 'array'],
+            'fixtures.*.round' => ['required_if:format,knockout', 'string', 'max:100'],
+            'fixtures.*.home_club_id' => ['required_if:format,knockout', 'integer', 'exists:users,id'],
+            'fixtures.*.away_club_id' => ['required_if:format,knockout', 'integer', 'exists:users,id'],
+            'fixtures.*.matches' => ['required_if:format,knockout', 'array', 'min:1'],
+            'fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
+            'fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
+            'fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $this->clubService->storeFixtures($request->user(), $tournament_id, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament fixtures saved successfully.',
+        ], 200);
+    }
+
+    public function getFixtures(Request $request, string $tournament_id): JsonResponse
+    {
+        $data = $this->clubService->getFixtures($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament fixtures retrieved successfully.',
+            'data' => $data,
+        ], 200);
+    }
+
     private function imageUrl(?string $path): ?string
     {
         return app_image_url($path);
