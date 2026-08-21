@@ -348,7 +348,7 @@ class TournamentFixtureTest extends TestCase
     {
         $tournament = Tournament::create([
             'club_id' => $this->hostClub->id,
-            'opponent_club_id' => [$this->opponentClub1->id],
+            'opponent_club_id' => [$this->opponentClub1->id, $this->opponentClub2->id],
             'name' => 'Knockout Cup',
             'format' => 'Knockout',
             'tournament_type' => 'CLUB_TO_CLUB',
@@ -363,6 +363,7 @@ class TournamentFixtureTest extends TestCase
         ]);
 
         TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub1->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub2->id, 'status' => 'accepted']);
         $this->setupRosters($tournament);
 
         $payload = [
@@ -381,6 +382,14 @@ class TournamentFixtureTest extends TestCase
                             'away_player_id' => $this->oppPlayer1->id
                         ]
                     ]
+                ],
+                [
+                    'round' => 'Round 1',
+                    'home_club_id' => $this->opponentClub2->id,
+                    'away_club_id' => null,
+                    'is_bye' => true,
+                    'bye_club_id' => $this->opponentClub2->id,
+                    'matches' => []
                 ]
             ]
         ];
@@ -402,7 +411,115 @@ class TournamentFixtureTest extends TestCase
         $getResponse->assertStatus(200);
         $getResponse->assertJsonPath('data.format', 'knockout');
         $getResponse->assertJsonPath('data.group_count', null);
-        $getResponse->assertJsonCount(1, 'data.fixtures');
+        $getResponse->assertJsonCount(2, 'data.fixtures');
         $getResponse->assertJsonPath('data.fixtures.0.round', 'Round 1');
+        $getResponse->assertJsonPath('data.fixtures.1.is_bye', true);
+        $getResponse->assertJsonPath('data.fixtures.1.bye_club.club_id', $this->opponentClub2->id);
+        $getResponse->assertJsonPath('data.fixtures.1.away_club', null);
+    }
+
+    public function test_host_club_can_store_and_retrieve_multiple_groups_league_fixtures_successfully(): void
+    {
+        $opponentClub3 = User::factory()->create(['role' => 'club', 'status' => 'active', 'club_name' => 'Opponent Club 3']);
+        $oppPlayer3 = User::factory()->create(['role' => 'player', 'status' => 'active']);
+
+        $tournament = Tournament::create([
+            'club_id' => $this->hostClub->id,
+            'opponent_club_id' => [$this->opponentClub1->id, $this->opponentClub2->id, $opponentClub3->id],
+            'name' => 'Multiple Group League',
+            'format' => 'League',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['BEGINNER'],
+            'age_group' => '15-35',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+        ]);
+
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub1->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub2->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $opponentClub3->id, 'status' => 'accepted']);
+
+        // Roster for host
+        $hostTeam = TournamentTeam::create(['tournament_id' => $tournament->id, 'club_id' => $this->hostClub->id, 'submission_status' => 'submitted']);
+        TournamentTeamPlayer::create(['team_id' => $hostTeam->id, 'player_id' => $this->hostPlayer1->id, 'position' => 1]);
+
+        // Roster for opp1
+        $opp1Team = TournamentTeam::create(['tournament_id' => $tournament->id, 'club_id' => $this->opponentClub1->id, 'submission_status' => 'submitted']);
+        TournamentTeamPlayer::create(['team_id' => $opp1Team->id, 'player_id' => $this->oppPlayer1->id, 'position' => 1]);
+
+        // Roster for opp2
+        $opp2Team = TournamentTeam::create(['tournament_id' => $tournament->id, 'club_id' => $this->opponentClub2->id, 'submission_status' => 'submitted']);
+        TournamentTeamPlayer::create(['team_id' => $opp2Team->id, 'player_id' => $this->oppPlayer2->id, 'position' => 1]);
+
+        // Roster for opp3
+        $opp3Team = TournamentTeam::create(['tournament_id' => $tournament->id, 'club_id' => $opponentClub3->id, 'submission_status' => 'submitted']);
+        TournamentTeamPlayer::create(['team_id' => $opp3Team->id, 'player_id' => $oppPlayer3->id, 'position' => 1]);
+
+        $payload = [
+            'format' => 'league',
+            'group_count' => 2,
+            'groups' => [
+                [
+                    'group_name' => 'Group A',
+                    'club_ids' => [$this->hostClub->id, $this->opponentClub1->id],
+                    'fixtures' => [
+                        [
+                            'round' => 'Round 1',
+                            'home_club_id' => $this->hostClub->id,
+                            'away_club_id' => $this->opponentClub1->id,
+                            'matches' => [
+                                [
+                                    'sequence' => 1,
+                                    'home_player_id' => $this->hostPlayer1->id,
+                                    'away_player_id' => $this->oppPlayer1->id
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    'group_name' => 'Group B',
+                    'club_ids' => [$this->opponentClub2->id, $opponentClub3->id],
+                    'fixtures' => [
+                        [
+                            'round' => 'Round 1',
+                            'home_club_id' => $this->opponentClub2->id,
+                            'away_club_id' => $opponentClub3->id,
+                            'matches' => [
+                                [
+                                    'sequence' => 1,
+                                    'home_player_id' => $this->oppPlayer2->id,
+                                    'away_player_id' => $oppPlayer3->id
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            'fixtures' => []
+        ];
+
+        $response = $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            $payload,
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $response->assertStatus(200);
+
+        // Get fixtures
+        $getResponse = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $getResponse->assertStatus(200);
+        $getResponse->assertJsonPath('data.format', 'league');
+        $getResponse->assertJsonPath('data.group_count', 2);
+        $getResponse->assertJsonCount(2, 'data.groups');
     }
 }

@@ -17,8 +17,14 @@ class TournamentFixture extends Model
         'round',
         'home_club_id',
         'away_club_id',
+        'is_bye',
+        'bye_club_id',
         'status',
         'winner_club_id',
+    ];
+
+    protected $casts = [
+        'is_bye' => 'boolean',
     ];
 
     public function tournament(): BelongsTo
@@ -44,6 +50,11 @@ class TournamentFixture extends Model
     public function winnerClub(): BelongsTo
     {
         return $this->belongsTo(User::class, 'winner_club_id');
+    }
+
+    public function byeClub(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'bye_club_id');
     }
 
     public function matches(): HasMany
