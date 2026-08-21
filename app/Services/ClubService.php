@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use App\Models\ClubTournamentRule;
 use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\User;
@@ -568,6 +569,32 @@ class ClubService
     public function tournamentDetail(User $club, string $tournamentId): Tournament
     {
         return $this->findClubTournament($club, $tournamentId);
+    }
+
+    public function getTournamentRules(User $club, string $tournamentId): ?ClubTournamentRule
+    {
+        $tournament = $this->findClubTournament($club, $tournamentId);
+
+        return ClubTournamentRule::where('tournament_id', $tournament->id)->first();
+    }
+
+    public function storeOrUpdateTournamentRules(User $club, string $tournamentId, array $data): ClubTournamentRule
+    {
+        $tournament = $this->findClubTournament($club, $tournamentId);
+
+        return ClubTournamentRule::updateOrCreate(
+            ['tournament_id' => $tournament->id],
+            [
+                'club_id' => $club->id,
+                'tournament_format' => $data['tournament_format'] ?? $tournament->format,
+                'competition_setup' => $data['competition_setup'] ?? null,
+                'pool_rules' => $data['pool_rules'] ?? null,
+                'knockout_rounds' => $data['knockout_rounds'] ?? null,
+                'match_equipment' => $data['match_equipment'] ?? null,
+                'scoring_rules' => $data['scoring_rules'] ?? null,
+                'note' => $data['note'] ?? null,
+            ]
+        );
     }
 
     public function storeTournament(User $club, array $data, ?UploadedFile $imageFile = null): Tournament

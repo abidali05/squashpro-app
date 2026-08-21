@@ -23,9 +23,11 @@ use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
 use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
 use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
+use App\Http\Requests\Api\V1\Club\SaveClubTournamentRulesRequest;
 use App\Http\Requests\Api\V1\Club\RespondToInvitationRequest;
 use App\Http\Requests\Api\V1\Club\SubmitTeamRequest;
 use App\Http\Resources\Api\V1\TournamentDetailResource;
+use App\Http\Resources\Api\V1\ClubTournamentRuleResource;
 use App\Models\TournamentRegistration;
 use App\Services\ClubService;
 use Illuminate\Http\JsonResponse;
@@ -255,6 +257,32 @@ class ClubController extends Controller
                 'id' => $tournament->id,
                 'status' => $tournament->status,
             ],
+        ]);
+    }
+
+    public function getTournamentRules(Request $request, string $tournament_id): JsonResponse
+    {
+        $rules = $this->clubService->getTournamentRules($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament rules retrieved successfully',
+            'data' => $rules ? new ClubTournamentRuleResource($rules) : null,
+        ]);
+    }
+
+    public function storeTournamentRules(SaveClubTournamentRulesRequest $request, string $tournament_id): JsonResponse
+    {
+        $rules = $this->clubService->storeOrUpdateTournamentRules(
+            $request->user(),
+            $tournament_id,
+            $request->validated()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament rules saved successfully',
+            'data' => new ClubTournamentRuleResource($rules),
         ]);
     }
 
