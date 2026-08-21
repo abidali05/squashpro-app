@@ -15,6 +15,7 @@ class PlayerBookingDetailResource extends JsonResource
             'club_name' => $this->club?->club_name ?? $this->club?->name,
             'club_logo' => $this->club ? $this->imageUrl($this->club->club_logo) : null,
             'booking_status' => $this->booking_status,
+            'rejection_reason' => $this->rejection_reason,
             'booking_id' => $this->id,
             'amount' => $this->normalizeNumber($this->total_amount),
             'court_name' => $this->court?->name,

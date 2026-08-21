@@ -23,6 +23,18 @@ class PlayerClubDetailResource extends JsonResource
             'facilities' => $this->resource['facilities'],
             'courts_count' => $this->resource['courts_count'],
             'lowest_court_price' => $this->resource['lowest_court_price'],
+            'working_hours' => $this->resource['working_hours'],
+
+            // MaxSquash v1.4 fields
+            'allow_non_member_booking' => $this->resource['allow_non_member_booking'],
+            'non_member_booking_start_time' => $this->resource['non_member_booking_start_time'],
+            'non_member_booking_end_time' => $this->resource['non_member_booking_end_time'],
+            'non_member_booking_schedule' => $this->resource['non_member_booking_schedule'] ?? null,
+            'is_member' => $this->resource['is_member'],
+            'membership_status' => $this->resource['membership_status'],
+            'membership_number' => $this->resource['membership_number'],
+            'can_book' => $this->resource['can_book'],
+            'requires_payment' => $this->resource['requires_payment'],
         ];
     }
 }

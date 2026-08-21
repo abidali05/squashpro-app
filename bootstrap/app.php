@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\RejectExpiredBookings;
 use App\Http\Middleware\RedirectIfRole;
 use App\Support\ApiErrorCode;
 use Illuminate\Auth\AuthenticationException;
@@ -31,6 +32,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.token' => \App\Http\Middleware\EnsureApiTokenIsValid::class,
             'api.role' => \App\Http\Middleware\EnsureUserHasRole::class,
         ]);
+    })
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
+        // Run every 15 minutes to catch expired pending bookings promptly
+        $schedule->command(RejectExpiredBookings::class)
+            ->everyFifteenMinutes()
+            ->timezone('Asia/Karachi')
+            ->withoutOverlapping()
+            ->runInBackground();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (ValidationException $exception, Request $request) {

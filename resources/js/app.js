@@ -1,4 +1,5 @@
 import './bootstrap';
+import './firebase';
 
 import Alpine from 'alpinejs';
 

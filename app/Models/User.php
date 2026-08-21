@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -43,6 +44,12 @@ class User extends Authenticatable
         'playing_level',
         'primary_hand',
         'bio',
+        'non_member_booking_allowed',
+        'non_member_booking_start_time',
+        'non_member_booking_end_time',
+        'timezone',
+        'are_you_scorer',
+        'are_you_umpire',
     ];
 
     /**
@@ -68,7 +75,20 @@ class User extends Authenticatable
             'otp_verified' => 'boolean',
             'facilities' => 'array',
             'dob' => 'date',
+            'non_member_booking_allowed' => 'boolean',
+            'are_you_scorer' => 'boolean',
+            'are_you_umpire' => 'boolean',
         ];
+    }
+
+    public function workingHoursSchedule(): HasMany
+    {
+        return $this->hasMany(ClubWorkingHour::class, 'club_id');
+    }
+
+    public function nonMemberWindows(): HasMany
+    {
+        return $this->hasMany(ClubNonMemberWindow::class, 'club_id');
     }
 
     public function courts(): HasMany
@@ -106,13 +126,46 @@ class User extends Authenticatable
         return $this->hasMany(BookingReview::class, 'club_id');
     }
 
-    public function appNotifications(): HasMany
+    public function appNotifications(): MorphMany
     {
-        return $this->hasMany(AppNotification::class);
+        return $this->morphMany(AppNotification::class, 'notifiable');
+    }
+
+    public function fcmTokens(): HasMany
+    {
+        return $this->hasMany(UserFcmToken::class);
+    }
+
+    public function routeNotificationForFcm(): ?string
+    {
+        return $this->fcmTokens()
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('id')
+            ->value('token');
     }
 
     public function cityRelation(): BelongsTo
     {
         return $this->belongsTo(City::class, 'city_id');
+    }
+
+    public function clubMembershipRequests(): HasMany
+    {
+        return $this->hasMany(ClubMembershipRequest::class, 'club_id');
+    }
+
+    public function playerMembershipRequests(): HasMany
+    {
+        return $this->hasMany(ClubMembershipRequest::class, 'player_id');
+    }
+
+    public function clubMemberships(): HasMany
+    {
+        return $this->hasMany(ClubMembership::class, 'club_id');
+    }
+
+    public function playerMemberships(): HasMany
+    {
+        return $this->hasMany(ClubMembership::class, 'player_id');
     }
 }

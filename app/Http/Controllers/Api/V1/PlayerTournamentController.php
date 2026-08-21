@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\Player\IndexTournamentsRequest;
 use App\Http\Requests\Api\V1\Player\RegisterTournamentRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentDetailResource;
+use App\Http\Requests\Api\V1\Player\IndexTournamentsRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentListResource;
 use App\Services\PlayerTournamentService;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,6 +22,7 @@ class PlayerTournamentController extends Controller
         $filter = $request->string('filter')->toString() ?: $request->string('status')->toString();
 
         $payload = $this->playerTournamentService->tournaments(
+            $request->user(),
             $filter ?: null,
             (int) $request->integer('page', 1),
             (int) $request->integer('limit', 10)
@@ -37,7 +38,7 @@ class PlayerTournamentController extends Controller
 
     public function show(Request $request, string $tournament_id): JsonResponse
     {
-        $tournament = $this->playerTournamentService->detail((int) $tournament_id);
+        $tournament = $this->playerTournamentService->detail($request->user(), (int) $tournament_id);
 
         return response()->json([
             'success' => true,
@@ -73,5 +74,46 @@ class PlayerTournamentController extends Controller
                 'tournament_id' => $registration->tournament_id,
             ],
         ], 201);
+    }
+
+    public function respondToParticipation(\App\Http\Requests\Api\V1\Player\PlayerParticipationRequest $request, string $tournament_id): JsonResponse
+    {
+        $status = $this->playerTournamentService->respondToParticipation(
+            $request->user(),
+            (int) $tournament_id,
+            $request->input('decision')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Participation response recorded successfully.',
+            'data' => [
+                'status' => $status,
+            ],
+        ]);
+    }
+
+    public function completePayment(Request $request, string $tournament_id): JsonResponse
+    {
+        $request->validate([
+            'payment_method_id' => ['required', 'string', 'in:card,wallet,cash,jazzcash,easypaisa'],
+        ]);
+
+        $registration = $this->playerTournamentService->completePayment(
+            $request->user(),
+            (int) $tournament_id,
+            $request->string('payment_method_id')->toString()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment completed successfully. Enrollment confirmed.',
+            'data' => [
+                'registration_id' => $registration->id,
+                'registration_status' => $registration->registration_status,
+                'payment_status' => $registration->payment_status,
+                'tournament_id' => $registration->tournament_id,
+            ],
+        ]);
     }
 }

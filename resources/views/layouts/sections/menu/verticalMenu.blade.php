@@ -22,7 +22,7 @@
             </a>
         </li>
 
-        <li class="menu-item {{ request()->routeIs('admin.clubs.*') || request()->routeIs('admin.courts.*') ? 'open' : '' }}">
+        <li class="menu-item {{ request()->routeIs('admin.clubs.*') || request()->routeIs('admin.courts.*') || request()->routeIs('admin.memberships.*') || request()->routeIs('admin.membership-requests.*') ? 'open' : '' }}">
             <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-domain"></i>
                 <div>Club Management</div>
@@ -34,6 +34,12 @@
                 <li class="menu-item {{ request()->routeIs('admin.courts.*') ? 'active' : '' }}">
                     <a href="{{ route('admin.courts.index') }}" class="menu-link"><div>Courts</div></a>
                 </li>
+                <li class="menu-item {{ request()->routeIs('admin.memberships.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.memberships.index') }}" class="menu-link"><div>Memberships</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.membership-requests.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.membership-requests.index') }}" class="menu-link"><div>Membership Requests</div></a>
+                </li>
             </ul>
         </li>
 
@@ -44,18 +50,34 @@
             </a>
         </li>
 
-        <li class="menu-item {{ request()->routeIs('admin.bookings.*') ? 'active' : '' }}">
-            <a href="{{ route('admin.bookings.index') }}" class="menu-link">
+        <li class="menu-item {{ request()->routeIs('admin.bookings.*') || request()->routeIs('admin.booking-reviews.*') ? 'open' : '' }}">
+            <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-calendar-check-outline"></i>
                 <div>Booking Management</div>
             </a>
+            <ul class="menu-sub">
+                <li class="menu-item {{ request()->routeIs('admin.bookings.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.bookings.index') }}" class="menu-link"><div>Bookings</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.booking-reviews.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.booking-reviews.index') }}" class="menu-link"><div>Reviews & Ratings</div></a>
+                </li>
+            </ul>
         </li>
 
-        <li class="menu-item {{ request()->routeIs('admin.tournaments.*') ? 'active' : '' }}">
-            <a href="{{ route('admin.tournaments.index') }}" class="menu-link">
+        <li class="menu-item {{ request()->routeIs('admin.tournaments.*') || request()->routeIs('admin.tournament-registrations.*') ? 'open' : '' }}">
+            <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-trophy-outline"></i>
                 <div>Tournament Management</div>
             </a>
+            <ul class="menu-sub">
+                <li class="menu-item {{ request()->routeIs('admin.tournaments.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tournaments.index') }}" class="menu-link"><div>Tournaments</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.tournament-registrations.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tournament-registrations.index') }}" class="menu-link"><div>Registrations & Teams</div></a>
+                </li>
+            </ul>
         </li>
 
         <li class="menu-item {{ request()->routeIs('admin.payments.*') || request()->routeIs('admin.revenue.*') ? 'open' : '' }}">
@@ -118,6 +140,13 @@
                     <a href="{{ route('admin.users.index') }}" class="menu-link"><div>Users</div></a>
                 </li>
             </ul>
+        </li>
+
+        <li class="menu-item {{ request()->routeIs('admin.audit-logs.*') ? 'active' : '' }}">
+            <a href="{{ route('admin.audit-logs.index') }}" class="menu-link">
+                <i class="menu-icon tf-icons mdi mdi-history"></i>
+                <div>Activity Logs</div>
+            </a>
         </li>
 
         <li class="menu-item {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">

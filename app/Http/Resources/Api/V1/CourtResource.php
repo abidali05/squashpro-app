@@ -18,6 +18,13 @@ class CourtResource extends JsonResource
             'type' => Str::headline((string) $this->type),
             'price_per_hour' => $price == (int) $price ? (int) $price : $price,
             'status' => in_array($this->status, ['maintenance', 'inactive'], true) ? 'maintenance' : 'available',
+            'slots' => $this->slots ? $this->slots->map(fn ($slot) => [
+                'day' => $slot->day,
+                'start_time' => substr((string)$slot->start_time, 0, 5),
+                'end_time' => substr((string)$slot->end_time, 0, 5),
+                'price' => (float) $slot->price,
+                'is_available' => (bool) $slot->is_available,
+            ]) : [],
         ];
     }
 }

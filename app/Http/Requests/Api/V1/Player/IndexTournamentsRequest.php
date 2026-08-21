@@ -14,8 +14,8 @@ class IndexTournamentsRequest extends BaseApiRequest
     public function rules(): array
     {
         return [
-            'filter' => ['nullable', 'in:all,upcoming,ongoing,completed'],
-            'status' => ['nullable', 'in:all,upcoming,ongoing,completed'],
+            'filter' => ['nullable', 'in:all,open,upcoming,ongoing,completed'],
+            'status' => ['nullable', 'in:all,open,upcoming,ongoing,completed'],
             'page' => ['nullable', 'integer', 'min:1'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];

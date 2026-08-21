@@ -15,6 +15,8 @@
 <link rel="stylesheet" href="{{ asset('assets/admin/css/datatable.css') }}" />
 <!-- Vendors CSS -->
 <link rel="stylesheet" href="{{ asset(mix('assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css')) }}" />
+<!-- Toastr CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
 
 <!-- Vendor Styles -->
 @yield('vendor-style')

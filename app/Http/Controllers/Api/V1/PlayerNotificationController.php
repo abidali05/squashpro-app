@@ -13,7 +13,8 @@ class PlayerNotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $notifications = AppNotification::query()
-            ->where('user_id', $request->user()->id)
+            ->where('notifiable_type', get_class($request->user()))
+            ->where('notifiable_id', $request->user()->id)
             ->latest()
             ->get()
             ->map(fn (AppNotification $notification) => [
@@ -38,7 +39,8 @@ class PlayerNotificationController extends Controller
     {
         $notification = AppNotification::query()
             ->whereKey($notification_id)
-            ->where('user_id', $request->user()->id)
+            ->where('notifiable_type', get_class($request->user()))
+            ->where('notifiable_id', $request->user()->id)
             ->first();
 
         if (! $notification) {
@@ -65,7 +67,8 @@ class PlayerNotificationController extends Controller
     public function markAllAsRead(Request $request): JsonResponse
     {
         AppNotification::query()
-            ->where('user_id', $request->user()->id)
+            ->where('notifiable_type', get_class($request->user()))
+            ->where('notifiable_id', $request->user()->id)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 

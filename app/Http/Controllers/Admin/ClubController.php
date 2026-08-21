@@ -84,7 +84,13 @@ class ClubController extends Controller
     public function show(User $club): View
     {
         abort_if($club->role !== 'club', 404);
-        $club->load('courts');
+        $club->load([
+            'courts',
+            'clubMemberships.player:id,name,email,profile_image',
+            'clubMembershipRequests.player:id,name,email,profile_image',
+            'workingHoursSchedule',
+            'nonMemberWindows',
+        ]);
 
         return view('content.admin.clubs.show', compact('club'));
     }
@@ -141,6 +147,14 @@ class ClubController extends Controller
     public function destroy(User $club): RedirectResponse
     {
         abort_if($club->role !== 'club', 404);
+
+        if ($club->tournaments()->whereIn('status', ['open', 'full', 'closed'])->exists()) {
+            return back()->withErrors(['club' => 'Club cannot be deleted while it has an active tournament.']);
+        }
+
+        if ($club->bookingsAsClub()->whereIn('booking_status', ['pending', 'confirmed'])->exists()) {
+            return back()->withErrors(['club' => 'Club cannot be deleted while it has an active booking.']);
+        }
 
         if ($club->club_logo) {
             Storage::disk('public')->delete($club->club_logo);

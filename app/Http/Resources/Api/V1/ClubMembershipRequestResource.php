@@ -1,0 +1,34 @@
+<?php
+
+namespace App\Http\Resources\Api\V1;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
+
+class ClubMembershipRequestResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        $player = $this->player;
+        $nameParts = explode(' ', trim($player->name ?? ''), 2);
+        $firstName = $nameParts[0] ?? '';
+        $lastName = $nameParts[1] ?? '';
+
+        return [
+            'id' => $this->id,
+            'status' => $this->status,
+            'membership_number' => $this->membership_number,
+            'submitted_at' => $this->created_at?->toIso8601String(),
+            'player' => [
+                'id' => $player->id ?? null,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'full_name' => $player->name ?? '',
+                'email' => $player->email ?? '',
+                'phone' => $player->phone ?? '',
+                'profile_image_url' => $player ? app_image_url($player->profile_image) : null,
+            ],
+        ];
+    }
+}

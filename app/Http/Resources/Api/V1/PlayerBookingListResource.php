@@ -20,6 +20,7 @@ class PlayerBookingListResource extends JsonResource
             'amount' => $this->normalizeNumber($this->total_amount),
             'payment_status' => $this->payment_status,
             'booking_status' => $this->booking_status,
+            'rejection_reason' => $this->rejection_reason,
         ];
     }
 

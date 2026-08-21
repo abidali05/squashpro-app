@@ -37,6 +37,16 @@ class Court extends Model
         return $this->hasMany(CourtTimeSlot::class, 'court_id');
     }
 
+    public function slots(): HasMany
+    {
+        return $this->hasMany(CourtSlot::class, 'court_id');
+    }
+
+    public function statusAudits(): HasMany
+    {
+        return $this->hasMany(CourtStatusAudit::class, 'court_id');
+    }
+
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'court_id');

@@ -23,6 +23,8 @@ use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
 use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
 use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
+use App\Http\Requests\Api\V1\Club\RespondToInvitationRequest;
+use App\Http\Requests\Api\V1\Club\SubmitTeamRequest;
 use App\Http\Resources\Api\V1\TournamentDetailResource;
 use App\Models\TournamentRegistration;
 use App\Services\ClubService;
@@ -289,7 +291,8 @@ class ClubController extends Controller
         $booking = $this->clubService->updateBookingStatus(
             $request->user(),
             $booking_id,
-            $request->input('status')
+            $request->input('status'),
+            $request->input('rejection_reason', $request->input('reason'))
         );
 
         return response()->json([
@@ -302,16 +305,158 @@ class ClubController extends Controller
         ]);
     }
 
+    public function respondToInvitation(RespondToInvitationRequest $request, string $tournament_id): JsonResponse
+    {
+        $status = $this->clubService->respondToInvitation(
+            $request->user(),
+            $tournament_id,
+            $request->input('decision')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation response recorded successfully.',
+            'data' => [
+                'status' => $status,
+            ],
+        ]);
+    }
+
+    public function eligiblePlayers(Request $request, string $tournament_id): JsonResponse
+    {
+        $result = $this->clubService->eligiblePlayers(
+            $request->user(),
+            $tournament_id,
+            (int) $request->query('page', 1),
+            (int) $request->query('limit', 20),
+            $request->query('search')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Eligible players retrieved successfully.',
+            'data' => $result['data'],
+            'meta' => $result['meta'],
+        ]);
+    }
+
+    public function submitTeam(SubmitTeamRequest $request, string $tournament_id): JsonResponse
+    {
+        $status = $this->clubService->submitTeam(
+            $request->user(),
+            $tournament_id,
+            $request->input('player_ids')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Team roster submitted successfully.',
+            'data' => [
+                'status' => $status,
+            ],
+        ]);
+    }
+
+    public function getTournamentTeam(Request $request, string $tournament_id): JsonResponse
+    {
+        $res = $this->clubService->getTournamentTeam(
+            $request->user(),
+            $tournament_id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament team roster retrieved successfully.',
+            'data' => $res['legacy_flat'],
+            'teams' => $res['teams_grouped'],
+        ]);
+    }
+
+    public function acceptRegistration(Request $request, string $tournament_id, string $registration_id): JsonResponse
+    {
+        $registration = $this->clubService->acceptRegistration(
+            $request->user(),
+            (int) $tournament_id,
+            (int) $registration_id
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament registration request accepted.',
+            'data' => [
+                'registration_id' => $registration->id,
+                'registration_status' => $registration->registration_status,
+                'payment_status' => $registration->payment_status,
+            ],
+        ]);
+    }
+
+    public function officials(Request $request): JsonResponse
+    {
+        $club = $request->user();
+        $officials = $this->clubService->getClubOfficials($club);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Club officials retrieved successfully.',
+            'data' => $officials,
+        ]);
+    }
+
+    public function storeFixtures(Request $request, string $tournament_id): JsonResponse
+    {
+        $validated = $request->validate([
+            'format' => ['required', 'string', 'in:league,knockout'],
+            'group_count' => ['nullable', 'integer', 'min:1'],
+            'groups' => ['nullable', 'array'],
+            'groups.*.group_name' => ['required_if:format,league', 'string', 'max:100'],
+            'groups.*.club_ids' => ['required_if:format,league', 'array'],
+            'groups.*.club_ids.*' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures' => ['nullable', 'array'],
+            'groups.*.fixtures.*.round' => ['required', 'string', 'max:100'],
+            'groups.*.fixtures.*.home_club_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.away_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.is_bye' => ['nullable', 'boolean'],
+            'groups.*.fixtures.*.bye_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches' => ['nullable', 'array'],
+            'groups.*.fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
+            'groups.*.fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+            
+            // Knockout fields
+            'fixtures' => ['nullable', 'array'],
+            'fixtures.*.round' => ['required_if:format,knockout', 'string', 'max:100'],
+            'fixtures.*.home_club_id' => ['required_if:format,knockout', 'integer', 'exists:users,id'],
+            'fixtures.*.away_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'fixtures.*.is_bye' => ['nullable', 'boolean'],
+            'fixtures.*.bye_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'fixtures.*.matches' => ['nullable', 'array'],
+            'fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
+            'fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
+            'fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $this->clubService->storeFixtures($request->user(), $tournament_id, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament fixtures saved successfully.',
+        ], 200);
+    }
+
+    public function getFixtures(Request $request, string $tournament_id): JsonResponse
+    {
+        $data = $this->clubService->getFixtures($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament fixtures retrieved successfully.',
+            'data' => $data,
+        ], 200);
+    }
+
     private function imageUrl(?string $path): ?string
     {
-        if (! $path) {
-            return null;
-        }
-
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-
-        return asset('storage/' . $path);
+        return app_image_url($path);
     }
 }
