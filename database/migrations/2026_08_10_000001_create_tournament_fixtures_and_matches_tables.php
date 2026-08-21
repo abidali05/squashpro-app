@@ -32,7 +32,9 @@ return new class extends Migration
             $table->foreignId('group_id')->nullable()->constrained('tournament_groups')->cascadeOnDelete();
             $table->string('round');
             $table->foreignId('home_club_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('away_club_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('away_club_id')->nullable()->constrained('users')->cascadeOnDelete();
+            $table->boolean('is_bye')->default(false);
+            $table->foreignId('bye_club_id')->nullable()->constrained('users')->cascadeOnDelete();
             $table->string('status')->default('scheduled');
             $table->foreignId('winner_club_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

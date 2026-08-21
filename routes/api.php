@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PlayerContentController;
 use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
+use App\Http\Controllers\Api\V1\PlayerOfficialTournamentController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use App\Http\Controllers\Api\V1\PublicClubController;
 use App\Http\Controllers\Api\V1\PublicPlayerController;
@@ -73,6 +74,11 @@ Route::prefix('v1')->group(function () {
             Route::post('tournament/register', [PlayerTournamentController::class, 'register']);
             Route::patch('tournaments/{tournament_id}/participation', [PlayerTournamentController::class, 'respondToParticipation']);
             Route::post('tournament/{tournament_id}/payment', [PlayerTournamentController::class, 'completePayment']);
+
+            // Official Scorer/Umpire routes
+            Route::get('official-tournaments', [PlayerOfficialTournamentController::class, 'index']);
+            Route::get('official-tournaments/{tournament_id}', [PlayerOfficialTournamentController::class, 'show']);
+            Route::get('official-tournaments/{tournament_id}/fixtures', [PlayerOfficialTournamentController::class, 'fixtures']);
         });
 
         // Club Routes

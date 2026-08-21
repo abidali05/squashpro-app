@@ -29,6 +29,8 @@ class PlayerProfileResource extends JsonResource
             'total_matches_played' => 0,
             'win_rate' => 0,
             'total_points' => 0,
+            'is_scorer' => (bool) $this->are_you_scorer,
+            'is_umpire' => (bool) $this->are_you_umpire,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
