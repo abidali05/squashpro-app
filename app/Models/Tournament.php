@@ -104,4 +104,9 @@ class Tournament extends Model
     {
         return $this->hasOne(ClubTournamentRule::class, 'tournament_id');
     }
+
+    public function clubTournamentPool(): HasOne
+    {
+        return $this->hasOne(ClubTournamentPool::class, 'tournament_id');
+    }
 }

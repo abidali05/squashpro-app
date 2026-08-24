@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\ClubTournamentRule;
+use App\Models\ClubTournamentPool;
 use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\User;
@@ -593,6 +594,28 @@ class ClubService
                 'match_equipment' => $data['match_equipment'] ?? null,
                 'scoring_rules' => $data['scoring_rules'] ?? null,
                 'note' => $data['note'] ?? null,
+            ]
+        );
+    }
+
+    public function getTournamentPools(User $club, string $tournamentId): ?ClubTournamentPool
+    {
+        $tournament = $this->findClubTournament($club, $tournamentId);
+
+        return ClubTournamentPool::where('tournament_id', $tournament->id)->first();
+    }
+
+    public function storeOrUpdateTournamentPools(User $club, string $tournamentId, array $data): ClubTournamentPool
+    {
+        $tournament = $this->findClubTournament($club, $tournamentId);
+
+        return ClubTournamentPool::updateOrCreate(
+            ['tournament_id' => $tournament->id],
+            [
+                'club_id' => $club->id,
+                'format' => $data['format'],
+                'has_pools' => (bool) $data['has_pools'],
+                'pools' => $data['pools'],
             ]
         );
     }
