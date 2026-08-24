@@ -24,10 +24,12 @@ use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
 use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
 use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
 use App\Http\Requests\Api\V1\Club\SaveClubTournamentRulesRequest;
+use App\Http\Requests\Api\V1\Club\SaveClubTournamentPoolsRequest;
 use App\Http\Requests\Api\V1\Club\RespondToInvitationRequest;
 use App\Http\Requests\Api\V1\Club\SubmitTeamRequest;
 use App\Http\Resources\Api\V1\TournamentDetailResource;
 use App\Http\Resources\Api\V1\ClubTournamentRuleResource;
+use App\Http\Resources\Api\V1\ClubTournamentPoolResource;
 use App\Models\TournamentRegistration;
 use App\Services\ClubService;
 use Illuminate\Http\JsonResponse;
@@ -286,6 +288,32 @@ class ClubController extends Controller
         ]);
     }
 
+    public function getTournamentPools(Request $request, string $tournament_id): JsonResponse
+    {
+        $pools = $this->clubService->getTournamentPools($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament pools retrieved successfully',
+            'data' => $pools ? new ClubTournamentPoolResource($pools) : null,
+        ]);
+    }
+
+    public function storeTournamentPools(SaveClubTournamentPoolsRequest $request, string $tournament_id): JsonResponse
+    {
+        $pools = $this->clubService->storeOrUpdateTournamentPools(
+            $request->user(),
+            $tournament_id,
+            $request->validated()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament pools saved successfully',
+            'data' => new ClubTournamentPoolResource($pools),
+        ]);
+    }
+
     public function bookings(IndexBookingsRequest $request): JsonResponse
     {
         $result = $this->clubService->bookings(
@@ -438,30 +466,56 @@ class ClubController extends Controller
             'group_count' => ['nullable', 'integer', 'min:1'],
             'groups' => ['nullable', 'array'],
             'groups.*.group_name' => ['required_if:format,league', 'string', 'max:100'],
-            'groups.*.club_ids' => ['required_if:format,league', 'array'],
-            'groups.*.club_ids.*' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.club_ids' => ['nullable', 'array'],
+            'groups.*.club_ids.*' => ['nullable', 'integer', 'exists:users,id'],
             'groups.*.fixtures' => ['nullable', 'array'],
             'groups.*.fixtures.*.round' => ['required', 'string', 'max:100'],
-            'groups.*.fixtures.*.home_club_id' => ['required', 'integer', 'exists:users,id'],
-            'groups.*.fixtures.*.away_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.home_club_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.away_club_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.home_placeholder' => ['nullable', 'string', 'max:100'],
+            'groups.*.fixtures.*.away_placeholder' => ['nullable', 'string', 'max:100'],
             'groups.*.fixtures.*.is_bye' => ['nullable', 'boolean'],
-            'groups.*.fixtures.*.bye_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.bye_club_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.is_rest' => ['nullable', 'boolean'],
+            'groups.*.fixtures.*.rest_club_id' => ['nullable', 'integer'],
             'groups.*.fixtures.*.matches' => ['nullable', 'array'],
             'groups.*.fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
-            'groups.*.fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
-            'groups.*.fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.home_player_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.matches.*.away_player_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.matches.*.home_player_placeholder' => ['nullable', 'string', 'max:100'],
+            'groups.*.fixtures.*.matches.*.away_player_placeholder' => ['nullable', 'string', 'max:100'],
+            'groups.*.fixtures.*.matches.*.venue_id' => ['nullable', 'integer'],
+            'groups.*.fixtures.*.matches.*.start_date' => ['nullable', 'string'],
+            'groups.*.fixtures.*.matches.*.start_time' => ['nullable', 'string'],
+            'groups.*.fixtures.*.matches.*.scorer_ids' => ['nullable', 'array'],
+            'groups.*.fixtures.*.matches.*.scorer_ids.*' => ['integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.umpire_ids' => ['nullable', 'array'],
+            'groups.*.fixtures.*.matches.*.umpire_ids.*' => ['integer', 'exists:users,id'],
             
             // Knockout fields
             'fixtures' => ['nullable', 'array'],
             'fixtures.*.round' => ['required_if:format,knockout', 'string', 'max:100'],
-            'fixtures.*.home_club_id' => ['required_if:format,knockout', 'integer', 'exists:users,id'],
-            'fixtures.*.away_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'fixtures.*.home_club_id' => ['nullable', 'integer'],
+            'fixtures.*.away_club_id' => ['nullable', 'integer'],
+            'fixtures.*.home_placeholder' => ['nullable', 'string', 'max:100'],
+            'fixtures.*.away_placeholder' => ['nullable', 'string', 'max:100'],
             'fixtures.*.is_bye' => ['nullable', 'boolean'],
-            'fixtures.*.bye_club_id' => ['nullable', 'integer', 'exists:users,id'],
+            'fixtures.*.bye_club_id' => ['nullable', 'integer'],
+            'fixtures.*.is_rest' => ['nullable', 'boolean'],
+            'fixtures.*.rest_club_id' => ['nullable', 'integer'],
             'fixtures.*.matches' => ['nullable', 'array'],
             'fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
-            'fixtures.*.matches.*.home_player_id' => ['required', 'integer', 'exists:users,id'],
-            'fixtures.*.matches.*.away_player_id' => ['required', 'integer', 'exists:users,id'],
+            'fixtures.*.matches.*.home_player_id' => ['nullable', 'integer'],
+            'fixtures.*.matches.*.away_player_id' => ['nullable', 'integer'],
+            'fixtures.*.matches.*.home_player_placeholder' => ['nullable', 'string', 'max:100'],
+            'fixtures.*.matches.*.away_player_placeholder' => ['nullable', 'string', 'max:100'],
+            'fixtures.*.matches.*.venue_id' => ['nullable', 'integer'],
+            'fixtures.*.matches.*.start_date' => ['nullable', 'string'],
+            'fixtures.*.matches.*.start_time' => ['nullable', 'string'],
+            'fixtures.*.matches.*.scorer_ids' => ['nullable', 'array'],
+            'fixtures.*.matches.*.scorer_ids.*' => ['integer', 'exists:users,id'],
+            'fixtures.*.matches.*.umpire_ids' => ['nullable', 'array'],
+            'fixtures.*.matches.*.umpire_ids.*' => ['integer', 'exists:users,id'],
         ]);
 
         $this->clubService->storeFixtures($request->user(), $tournament_id, $validated);

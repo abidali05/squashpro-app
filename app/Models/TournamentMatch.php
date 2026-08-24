@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class TournamentMatch extends Model
 {
@@ -15,6 +16,11 @@ class TournamentMatch extends Model
         'sequence',
         'home_player_id',
         'away_player_id',
+        'home_player_placeholder',
+        'away_player_placeholder',
+        'venue_id',
+        'start_date',
+        'start_time',
         'status',
         'score',
         'winner_player_id',
@@ -38,5 +44,20 @@ class TournamentMatch extends Model
     public function winnerPlayer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'winner_player_id');
+    }
+
+    public function venue(): BelongsTo
+    {
+        return $this->belongsTo(Court::class, 'venue_id');
+    }
+
+    public function scorers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tournament_match_scorers', 'match_id', 'user_id')->withTimestamps();
+    }
+
+    public function umpires(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tournament_match_umpires', 'match_id', 'user_id')->withTimestamps();
     }
 }

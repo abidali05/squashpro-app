@@ -99,6 +99,8 @@ Route::prefix('v1')->group(function () {
             Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
             Route::get('tournaments/{tournament_id}/rules', [ClubController::class, 'getTournamentRules']);
             Route::post('tournaments/{tournament_id}/rules', [ClubController::class, 'storeTournamentRules']);
+            Route::get('tournaments/{tournament_id}/pools', [ClubController::class, 'getTournamentPools']);
+            Route::post('tournaments/{tournament_id}/pools', [ClubController::class, 'storeTournamentPools']);
             Route::patch('tournaments/{tournament_id}/invitation', [ClubController::class, 'respondToInvitation']);
             Route::get('tournaments/{tournament_id}/eligible-players', [ClubController::class, 'eligiblePlayers']);
             Route::post('tournaments/{tournament_id}/team', [ClubController::class, 'submitTeam']);

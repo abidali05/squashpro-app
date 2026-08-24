@@ -522,4 +522,220 @@ class TournamentFixtureTest extends TestCase
         $getResponse->assertJsonPath('data.group_count', 2);
         $getResponse->assertJsonCount(2, 'data.groups');
     }
+
+    public function test_can_store_and_retrieve_knockout_placeholders_scheduling_and_officials(): void
+    {
+        $tournament = Tournament::create([
+            'club_id' => $this->hostClub->id,
+            'opponent_club_id' => [$this->opponentClub1->id, $this->opponentClub2->id],
+            'name' => 'Knockout Championship',
+            'format' => 'Knockout',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['BEGINNER'],
+            'age_group' => '15-35',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+        ]);
+
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub1->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub2->id, 'status' => 'accepted']);
+        $this->setupRosters($tournament);
+
+        $court = \App\Models\Court::create([
+            'club_id' => $this->hostClub->id,
+            'name' => 'Court 1',
+            'type' => 'glass',
+            'price_per_hour' => 50,
+            'capacity' => 2,
+            'status' => 'active'
+        ]);
+        $scorer = User::factory()->create(['role' => 'player', 'status' => 'active']);
+        $umpire = User::factory()->create(['role' => 'player', 'status' => 'active']);
+
+        $payload = [
+            'format' => 'knockout',
+            'group_count' => null,
+            'groups' => [],
+            'fixtures' => [
+                [
+                    'round' => 'Quarter Finals',
+                    'home_club_id' => $this->hostClub->id,
+                    'away_club_id' => $this->opponentClub1->id,
+                    'matches' => [
+                        [
+                            'sequence' => 1,
+                            'home_player_id' => $this->hostPlayer1->id,
+                            'away_player_id' => $this->oppPlayer1->id,
+                            'venue_id' => $court->id,
+                            'start_date' => '2026-09-01',
+                            'start_time' => '10:00 AM',
+                            'scorer_ids' => [$scorer->id],
+                            'umpire_ids' => [$umpire->id]
+                        ]
+                    ]
+                ],
+                [
+                    'round' => 'Quarter Finals',
+                    'home_club_id' => $this->opponentClub2->id,
+                    'away_club_id' => null,
+                    'is_bye' => true,
+                    'bye_club_id' => $this->opponentClub2->id,
+                    'matches' => []
+                ],
+                [
+                    'round' => 'Semi Finals',
+                    'home_placeholder' => 'Winner 1',
+                    'away_placeholder' => 'Winner 2',
+                    'matches' => [
+                        [
+                            'sequence' => 1,
+                            'home_player_placeholder' => 'Winner 1',
+                            'away_player_placeholder' => 'Winner 2',
+                            'venue_id' => $court->id,
+                            'start_date' => '2026-09-02',
+                            'start_time' => '02:00 PM',
+                            'scorer_ids' => [$scorer->id],
+                            'umpire_ids' => [$umpire->id]
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $response = $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            $payload,
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('tournament_fixtures', [
+            'tournament_id' => $tournament->id,
+            'round' => 'Semi Finals',
+            'home_placeholder' => 'Winner 1',
+            'away_placeholder' => 'Winner 2'
+        ]);
+
+        $getResponse = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $getResponse->assertStatus(200);
+        $getResponse->assertJsonPath('data.fixtures.2.home_club.club_id', 0);
+        $getResponse->assertJsonPath('data.fixtures.2.home_club.club_name', 'Winner 1');
+        $getResponse->assertJsonPath('data.fixtures.2.matches.0.home_player.full_name', 'Winner 1');
+        $getResponse->assertJsonPath('data.fixtures.2.matches.0.scorer_ids.0', $scorer->id);
+    }
+
+    public function test_can_store_and_retrieve_league_with_knockout_stage_and_rest_fixtures(): void
+    {
+        $opponentClub3 = User::factory()->create(['role' => 'club', 'status' => 'active', 'club_name' => 'Opponent Club 3']);
+        $tournament = Tournament::create([
+            'club_id' => $this->hostClub->id,
+            'opponent_club_id' => [$this->opponentClub1->id, $this->opponentClub2->id, $opponentClub3->id],
+            'name' => 'League Championship',
+            'format' => 'League',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['BEGINNER'],
+            'age_group' => '15-35',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+        ]);
+
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub1->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $this->opponentClub2->id, 'status' => 'accepted']);
+        TournamentInvitation::create(['tournament_id' => $tournament->id, 'invited_club_id' => $opponentClub3->id, 'status' => 'accepted']);
+        $this->setupRosters($tournament);
+
+        $payload = [
+            'format' => 'league',
+            'group_count' => 2,
+            'groups' => [
+                [
+                    'group_name' => 'Group A',
+                    'club_ids' => [$this->hostClub->id, $this->opponentClub1->id],
+                    'fixtures' => [
+                        [
+                            'round' => 'Round 1',
+                            'home_club_id' => $this->hostClub->id,
+                            'away_club_id' => $this->opponentClub1->id,
+                            'matches' => [
+                                [
+                                    'sequence' => 1,
+                                    'home_player_id' => $this->hostPlayer1->id,
+                                    'away_player_id' => $this->oppPlayer1->id
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    'group_name' => 'Group B',
+                    'club_ids' => [$this->opponentClub2->id, $opponentClub3->id],
+                    'fixtures' => [
+                        [
+                            'round' => 'Round 1',
+                            'home_club_id' => $this->opponentClub2->id,
+                            'away_club_id' => null,
+                            'is_rest' => true,
+                            'rest_club_id' => $this->opponentClub2->id,
+                            'matches' => []
+                        ]
+                    ]
+                ],
+                [
+                    'group_name' => 'Knockout Stage',
+                    'club_ids' => [],
+                    'fixtures' => [
+                        [
+                            'round' => 'Semi Final',
+                            'home_placeholder' => 'Group A #1',
+                            'away_placeholder' => 'Group B #2',
+                            'matches' => [
+                                [
+                                    'sequence' => 1,
+                                    'home_player_placeholder' => 'Group A #1',
+                                    'away_player_placeholder' => 'Group B #2'
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            'fixtures' => []
+        ];
+
+        $response = $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            $payload,
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('tournament_fixtures', [
+            'tournament_id' => $tournament->id,
+            'is_rest' => true,
+            'rest_club_id' => $this->opponentClub2->id
+        ]);
+
+        $getResponse = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $getResponse->assertStatus(200);
+        $getResponse->assertJsonPath('data.groups.1.fixtures.0.is_rest', true);
+        $getResponse->assertJsonPath('data.groups.1.fixtures.0.rest_club_id', $this->opponentClub2->id);
+    }
 }

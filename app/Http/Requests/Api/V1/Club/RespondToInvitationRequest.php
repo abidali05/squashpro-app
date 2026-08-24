@@ -14,7 +14,7 @@ class RespondToInvitationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'decision' => ['required', 'string', 'in:ACCEPT,REJECT'],
+            'decision' => ['required', 'string', 'in:ACCEPT,REJECT,accept,reject'],
         ];
     }
 }
