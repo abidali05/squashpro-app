@@ -48,7 +48,7 @@ class TournamentMatch extends Model
 
     public function venue(): BelongsTo
     {
-        return $this->belongsTo(Court::class, 'venue_id');
+        return $this->belongsTo(User::class, 'venue_id');
     }
 
     public function scorers(): BelongsToMany

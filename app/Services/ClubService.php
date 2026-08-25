@@ -2033,6 +2033,11 @@ class ClubService
 
                         $matchesPay = $fixPay['matches'] ?? [];
                         foreach ($matchesPay as $matchPay) {
+                            $vId = !empty($matchPay['venue_id']) ? (int)$matchPay['venue_id'] : null;
+                            if ($vId && !\App\Models\User::where('id', $vId)->exists()) {
+                                $vId = null;
+                            }
+
                             $match = \App\Models\TournamentMatch::create([
                                 'fixture_id' => $fixture->id,
                                 'sequence' => $matchPay['sequence'],
@@ -2040,7 +2045,7 @@ class ClubService
                                 'away_player_id' => !empty($matchPay['away_player_id']) ? (int)$matchPay['away_player_id'] : null,
                                 'home_player_placeholder' => $matchPay['home_player_placeholder'] ?? null,
                                 'away_player_placeholder' => $matchPay['away_player_placeholder'] ?? null,
-                                'venue_id' => !empty($matchPay['venue_id']) ? (int)$matchPay['venue_id'] : null,
+                                'venue_id' => $vId,
                                 'start_date' => $matchPay['start_date'] ?? null,
                                 'start_time' => $matchPay['start_time'] ?? null,
                                 'status' => 'scheduled'
@@ -2075,6 +2080,11 @@ class ClubService
 
                     $matchesPay = $fixPay['matches'] ?? [];
                     foreach ($matchesPay as $matchPay) {
+                        $vId = !empty($matchPay['venue_id']) ? (int)$matchPay['venue_id'] : null;
+                        if ($vId && !\App\Models\User::where('id', $vId)->exists()) {
+                            $vId = null;
+                        }
+
                         $match = \App\Models\TournamentMatch::create([
                             'fixture_id' => $fixture->id,
                             'sequence' => $matchPay['sequence'],
@@ -2082,7 +2092,7 @@ class ClubService
                             'away_player_id' => !empty($matchPay['away_player_id']) ? (int)$matchPay['away_player_id'] : null,
                             'home_player_placeholder' => $matchPay['home_player_placeholder'] ?? null,
                             'away_player_placeholder' => $matchPay['away_player_placeholder'] ?? null,
-                            'venue_id' => !empty($matchPay['venue_id']) ? (int)$matchPay['venue_id'] : null,
+                            'venue_id' => $vId,
                             'start_date' => $matchPay['start_date'] ?? null,
                             'start_time' => $matchPay['start_time'] ?? null,
                             'status' => 'scheduled'
