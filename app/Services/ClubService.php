@@ -1577,8 +1577,9 @@ class ClubService
             ];
         }
 
-        // Get invited clubs
+        // Get invited clubs (excluding rejected invitations)
         $invitations = \App\Models\TournamentInvitation::where('tournament_id', $tournament->id)
+            ->where('status', '!=', 'rejected')
             ->with('invitedClub')
             ->get();
 
@@ -1586,6 +1587,7 @@ class ClubService
         foreach ($invitations as $inv) {
             $invitedClub = $inv->invitedClub;
             if (!$invitedClub) continue;
+            if ($inv->status === 'rejected') continue;
             $invitedClubIds[] = $invitedClub->id;
 
             $oppTeam = \App\Models\TournamentTeam::where('tournament_id', $tournament->id)
