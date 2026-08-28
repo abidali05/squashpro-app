@@ -2160,6 +2160,12 @@ class ClubService
                         'player_id' => (int) $m->home_player_id,
                         'full_name' => $m->homePlayer->name,
                     ];
+                } elseif ($m->home_player_id) {
+                    $u = User::find($m->home_player_id);
+                    $homePlayer = [
+                        'player_id' => (int) $m->home_player_id,
+                        'full_name' => $u?->name ?? "Player #{$m->home_player_id}",
+                    ];
                 } elseif ($m->home_player_placeholder !== null && $m->home_player_placeholder !== '') {
                     $homePlayer = [
                         'player_id' => 0,
@@ -2172,6 +2178,12 @@ class ClubService
                     $awayPlayer = [
                         'player_id' => (int) $m->away_player_id,
                         'full_name' => $m->awayPlayer->name,
+                    ];
+                } elseif ($m->away_player_id) {
+                    $u = User::find($m->away_player_id);
+                    $awayPlayer = [
+                        'player_id' => (int) $m->away_player_id,
+                        'full_name' => $u?->name ?? "Player #{$m->away_player_id}",
                     ];
                 } elseif ($m->away_player_placeholder !== null && $m->away_player_placeholder !== '') {
                     $awayPlayer = [
