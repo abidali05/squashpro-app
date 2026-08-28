@@ -9,26 +9,24 @@
     $fixtureList = $fixtures ?? ($fixture ? collect([$fixture]) : collect());
 @endphp
 
-<div class="admin-page-header mb-4">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-        <div>
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <h4 class="fw-bold mb-0 text-dark">
-                    {{ $tourn?->name ?? 'Match Fixtures' }}
-                </h4>
-                <span class="badge bg-label-primary px-2.5 py-1 rounded-pill ms-2">
-                    {{ ucfirst(($tourn?->format) ?: 'Standard') }}
-                </span>
-            </div>
-            <p class="text-muted small mb-0">
-                Host Club: <strong class="text-dark">{{ $club?->club_name ?? $club?->name ?? '—' }}</strong>
-            </p>
+<div class="admin-page-header mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div class="admin-page-header__left">
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h4 class="fw-bold mb-0 text-dark">
+                {{ $tourn?->name ?? 'Match Fixtures' }}
+            </h4>
+            <span class="badge bg-label-primary px-2.5 py-1 rounded-pill ms-2">
+                {{ ucfirst(($tourn?->format) ?: 'Standard') }}
+            </span>
         </div>
-        <div>
-            <a href="{{ route('admin.tournaments.index') }}" class="btn btn-outline-secondary btn-sm shadow-xs">
-                <i class="mdi mdi-arrow-left me-1"></i> Back
-            </a>
-        </div>
+        <p class="text-muted small mb-0">
+            Host Club: <strong class="text-dark">{{ $club?->club_name ?? $club?->name ?? '—' }}</strong>
+        </p>
+    </div>
+    <div class="admin-page-header__actions ms-auto">
+        <a href="{{ route('admin.tournaments.index') }}" class="btn btn-outline-secondary btn-sm shadow-xs">
+            <i class="mdi mdi-arrow-left me-1"></i> Back
+        </a>
     </div>
 </div>
 
