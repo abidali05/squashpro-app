@@ -2151,149 +2151,157 @@ class ClubService
         $groups = [];
         $fixtures = [];
 
-        $formatFixture = function (TournamentFixture $f) {
+        $tournamentType = $tournament->tournament_type ?? ($tournament->opponent_club_id ? 'CLUB_TO_CLUB' : 'CLUB_MEMBERS_ONLY');
+
+        $formatFixture = function (TournamentFixture $f) use ($tournamentType) {
             $fMatches = [];
             foreach ($f->matches as $m) {
-                $homePlayer = null;
+                $homePlayerMatch = null;
                 if ($m->home_player_id && $m->homePlayer) {
-                    $homePlayer = [
+                    $img = $m->homePlayer->profile_image;
+                    $homePlayerMatch = [
                         'player_id' => (int) $m->home_player_id,
                         'full_name' => $m->homePlayer->name,
+                        'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
                 } elseif ($m->home_player_id) {
                     $u = User::find($m->home_player_id);
-                    $homePlayer = [
+                    $img = $u?->profile_image;
+                    $homePlayerMatch = [
                         'player_id' => (int) $m->home_player_id,
                         'full_name' => $u?->name ?? "Player #{$m->home_player_id}",
-                    ];
-                } elseif ($m->home_player_placeholder !== null && $m->home_player_placeholder !== '') {
-                    $homePlayer = [
-                        'player_id' => 0,
-                        'full_name' => $m->home_player_placeholder,
+                        'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
                 }
 
-                $awayPlayer = null;
+                $awayPlayerMatch = null;
                 if ($m->away_player_id && $m->awayPlayer) {
-                    $awayPlayer = [
+                    $img = $m->awayPlayer->profile_image;
+                    $awayPlayerMatch = [
                         'player_id' => (int) $m->away_player_id,
                         'full_name' => $m->awayPlayer->name,
+                        'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
                 } elseif ($m->away_player_id) {
                     $u = User::find($m->away_player_id);
-                    $awayPlayer = [
+                    $img = $u?->profile_image;
+                    $awayPlayerMatch = [
                         'player_id' => (int) $m->away_player_id,
                         'full_name' => $u?->name ?? "Player #{$m->away_player_id}",
-                    ];
-                } elseif ($m->away_player_placeholder !== null && $m->away_player_placeholder !== '') {
-                    $awayPlayer = [
-                        'player_id' => 0,
-                        'full_name' => $m->away_player_placeholder,
+                        'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
                 }
 
-                $courtData = null;
-                if ($m->court_id && $m->court) {
-                    $courtData = [
-                        'court_id' => (int) $m->court->id,
-                        'name' => $m->court->name,
-                        'type' => $m->court->type,
+                $venueUser = $m->venue_id ? User::find($m->venue_id) : null;
+                $venueName = $venueUser?->club_name ?? $venueUser?->name;
+
+                $scorersList = $m->scorers->map(function ($s) {
+                    $uName = $s->name ?? User::find($s->id)?->name;
+                    return [
+                        'id' => (int) $s->id,
+                        'full_name' => $uName,
                     ];
-                }
+                })->values()->all();
+
+                $umpiresList = $m->umpires->map(function ($u) {
+                    $uName = $u->name ?? User::find($u->id)?->name;
+                    return [
+                        'id' => (int) $u->id,
+                        'full_name' => $uName,
+                    ];
+                })->values()->all();
 
                 $fMatches[] = [
                     'match_id' => (int) $m->id,
                     'sequence' => (int) $m->sequence,
-                    'home_player_id' => $m->home_player_id ? (int) $m->home_player_id : null,
-                    'away_player_id' => $m->away_player_id ? (int) $m->away_player_id : null,
+                    'home_player' => $homePlayerMatch,
+                    'away_player' => $awayPlayerMatch,
                     'home_player_placeholder' => $m->home_player_placeholder,
                     'away_player_placeholder' => $m->away_player_placeholder,
-                    'home_player' => $homePlayer,
-                    'away_player' => $awayPlayer,
-                    'status' => $m->status,
-                    'score' => $m->score,
                     'winner_player_id' => $m->winner_player_id ? (int) $m->winner_player_id : null,
+                    'status' => $m->status,
                     'venue_id' => $m->venue_id ? (int) $m->venue_id : null,
+                    'venue_name' => $venueName,
                     'court_id' => $m->court_id ? (int) $m->court_id : null,
-                    'court' => $courtData,
+                    'court_name' => $m->court?->name,
                     'start_date' => $m->start_date ? (is_string($m->start_date) ? $m->start_date : $m->start_date->format('Y-m-d')) : null,
                     'start_time' => $m->start_time,
                     'scorer_ids' => $m->scorers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                    'scorers' => $scorersList,
                     'umpire_ids' => $m->umpires->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
-                ];
-            }
-
-            $homeClub = null;
-            if ($f->home_club_id && $f->homeClub) {
-                $homeClub = [
-                    'club_id' => (int) $f->home_club_id,
-                    'club_name' => $f->homeClub->club_name ?? $f->homeClub->name,
-                    'club_logo' => app_image_url($f->homeClub->club_logo),
-                ];
-            } elseif ($f->home_placeholder !== null && $f->home_placeholder !== '') {
-                $homeClub = [
-                    'club_id' => 0,
-                    'club_name' => $f->home_placeholder,
-                    'club_logo' => '',
-                ];
-            }
-
-            $awayClub = null;
-            if ($f->away_club_id && $f->awayClub) {
-                $awayClub = [
-                    'club_id' => (int) $f->away_club_id,
-                    'club_name' => $f->awayClub->club_name ?? $f->awayClub->name,
-                    'club_logo' => app_image_url($f->awayClub->club_logo),
-                ];
-            } elseif ($f->away_placeholder !== null && $f->away_placeholder !== '') {
-                $awayClub = [
-                    'club_id' => 0,
-                    'club_name' => $f->away_placeholder,
-                    'club_logo' => '',
-                ];
-            }
-
-            $fixtureCourtData = null;
-            if ($f->court_id && $f->court) {
-                $fixtureCourtData = [
-                    'court_id' => (int) $f->court->id,
-                    'name' => $f->court->name,
-                    'type' => $f->court->type,
+                    'umpires' => $umpiresList,
+                    'scores' => [
+                        'home_score' => (int) ($m->home_score ?? 0),
+                        'away_score' => (int) ($m->away_score ?? 0),
+                        'games' => $m->games ?? [],
+                    ],
                 ];
             }
 
             $fixData = [
                 'fixture_id' => (int) $f->id,
                 'round' => $f->round,
-                'home_club_id' => $f->home_club_id ? (int) $f->home_club_id : null,
-                'away_club_id' => $f->away_club_id ? (int) $f->away_club_id : null,
-                'home_placeholder' => $f->home_placeholder,
-                'away_placeholder' => $f->away_placeholder,
-                'home_club' => $homeClub,
-                'away_club' => $awayClub,
-                'status' => $f->status,
                 'is_bye' => (bool) $f->is_bye,
                 'is_rest' => (bool) $f->is_rest,
-                'court_id' => $f->court_id ? (int) $f->court_id : null,
-                'court' => $fixtureCourtData,
+                'status' => $f->status,
             ];
 
-            if ($f->is_bye) {
-                $fixData['bye_club_id'] = $f->bye_club_id ? (int) $f->bye_club_id : null;
-                $fixData['bye_club'] = $f->bye_club_id ? [
-                    'club_id' => (int) $f->bye_club_id,
-                    'club_name' => $f->byeClub?->club_name ?? $f->byeClub?->name,
+            if ($tournamentType === 'CLUB_MEMBERS_ONLY') {
+                $firstMatch = $f->matches->first();
+
+                $homePId = $f->home_club_id ?: ($firstMatch?->home_player_id ?: null);
+                $homePUser = $homePId ? User::find($homePId) : ($firstMatch?->homePlayer ?: null);
+
+                $awayPId = $f->away_club_id ?: ($firstMatch?->away_player_id ?: null);
+                $awayPUser = $awayPId ? User::find($awayPId) : ($firstMatch?->awayPlayer ?: null);
+
+                if (! $homePUser && $f->is_bye) {
+                    $byeId = $f->bye_club_id ?: ($homePId ?: ($firstMatch?->home_player_id ?: null));
+                    if ($byeId) {
+                        $homePUser = User::find($byeId);
+                    }
+                }
+
+                $fixData['home_player'] = $homePUser ? [
+                    'id' => (int) $homePUser->id,
+                    'name' => $homePUser->name,
+                    'email' => $homePUser->email,
+                    'phone' => $homePUser->phone,
+                    'profile_image' => $homePUser->profile_image ? (str_starts_with($homePUser->profile_image, 'http') ? $homePUser->profile_image : Storage::disk('public')->url($homePUser->profile_image)) : null,
                 ] : null;
+
+                $fixData['away_player'] = $awayPUser ? [
+                    'id' => (int) $awayPUser->id,
+                    'name' => $awayPUser->name,
+                    'email' => $awayPUser->email,
+                    'phone' => $awayPUser->phone,
+                    'profile_image' => $awayPUser->profile_image ? (str_starts_with($awayPUser->profile_image, 'http') ? $awayPUser->profile_image : Storage::disk('public')->url($awayPUser->profile_image)) : null,
+                ] : null;
+            } else {
+                $homeClub = null;
+                if ($f->home_club_id && $f->homeClub) {
+                    $homeClub = [
+                        'club_id' => (int) $f->home_club_id,
+                        'club_name' => $f->homeClub->club_name ?? $f->homeClub->name,
+                        'club_logo' => app_image_url($f->homeClub->club_logo),
+                    ];
+                }
+
+                $awayClub = null;
+                if ($f->away_club_id && $f->awayClub) {
+                    $awayClub = [
+                        'club_id' => (int) $f->away_club_id,
+                        'club_name' => $f->awayClub->club_name ?? $f->awayClub->name,
+                        'club_logo' => app_image_url($f->awayClub->club_logo),
+                    ];
+                }
+
+                $fixData['home_club'] = $homeClub;
+                $fixData['away_club'] = $awayClub;
             }
 
-            if ($f->is_rest) {
-                $fixData['rest_club_id'] = $f->rest_club_id ? (int) $f->rest_club_id : null;
-                $fixData['rest_club'] = $f->rest_club_id ? [
-                    'club_id' => (int) $f->rest_club_id,
-                    'club_name' => $f->restClub?->club_name ?? $f->restClub?->name,
-                ] : null;
-            }
-
+            $fixData['home_placeholder'] = $f->home_placeholder;
+            $fixData['away_placeholder'] = $f->away_placeholder;
             $fixData['matches'] = $fMatches;
 
             return $fixData;
@@ -2301,7 +2309,7 @@ class ClubService
 
         if ($format === 'league') {
             $savedGroups = TournamentGroup::where('tournament_id', $tournament->id)
-                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id', 'fixtures.matches.umpires:id'])
+                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id,name', 'fixtures.matches.umpires:id,name'])
                 ->get();
 
             foreach ($savedGroups as $g) {
@@ -2328,15 +2336,13 @@ class ClubService
         } else {
             $savedFixtures = TournamentFixture::where('tournament_id', $tournament->id)
                 ->whereNull('group_id')
-                ->with(['court:id,name,type', 'homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.court:id,name,type', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id', 'matches.umpires:id'])
+                ->with(['court:id,name,type', 'homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.court:id,name,type', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id,name', 'matches.umpires:id,name'])
                 ->get();
 
             foreach ($savedFixtures as $f) {
                 $fixtures[] = $formatFixture($f);
             }
         }
-
-        $tournamentType = $tournament->tournament_type ?? ($tournament->opponent_club_id ? 'CLUB_TO_CLUB' : 'CLUB_MEMBERS_ONLY');
 
         return [
             'tournament_id' => (int) $tournament->id,
