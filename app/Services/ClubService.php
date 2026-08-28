@@ -2107,7 +2107,7 @@ class ClubService
                         'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : null,
                         'court_id' => ! empty($fixPay['court_id']) ? (int) $fixPay['court_id'] : null,
                         'status' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'bye' : (filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'rest' : 'scheduled'),
-                    ]);
+                    ])
 
                     $matchesPay = $fixPay['matches'] ?? [];
                     foreach ($matchesPay as $matchPay) {

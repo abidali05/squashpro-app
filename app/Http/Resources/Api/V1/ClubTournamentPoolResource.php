@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Api\V1;
 
-use App\Models\ClubMembership;
 use App\Models\TournamentTeam;
 use App\Models\TournamentTeamPlayer;
 use App\Models\User;
@@ -30,9 +29,8 @@ class ClubTournamentPoolResource extends JsonResource
                 'pool_index' => $poolIndex,
             ];
 
-            if (! empty($playerIds)) {
+            if ($tournamentType === 'CLUB_MEMBERS_ONLY' || (! empty($playerIds) && empty($clubIds))) {
                 $playersList = [];
-                $teamsList = [];
                 $drawPosition = 1;
 
                 foreach ($playerIds as $pid) {
@@ -43,34 +41,16 @@ class ClubTournamentPoolResource extends JsonResource
 
                     $playersList[] = [
                         'id' => (int) $pid,
-                        'player_id' => (int) $pid,
                         'name' => $name,
                         'email' => $pUser?->email,
                         'phone' => $pUser?->phone,
                         'profile_image' => $img,
-                        'draw_position' => $drawPosition,
+                        'draw_position' => $drawPosition++,
                     ];
-
-                    $teamsList[] = [
-                        'club_id' => (int) $pid,
-                        'club_name' => $name,
-                        'club_logo' => $img,
-                        'draw_position' => $drawPosition,
-                        'players' => [
-                            [
-                                'player_id' => (int) $pid,
-                                'name' => $name,
-                                'profile_image' => $img,
-                            ],
-                        ],
-                    ];
-
-                    $drawPosition++;
                 }
 
                 $poolItem['players'] = $playersList;
-                $poolItem['teams'] = $teamsList;
-            } elseif (! empty($clubIds)) {
+            } else {
                 $teams = [];
                 $drawPosition = 1;
 
@@ -105,7 +85,7 @@ class ClubTournamentPoolResource extends JsonResource
                     }
 
                     $teams[] = [
-                        'club_id' => $clubId,
+                        'club_id' => (int) $clubId,
                         'club_name' => $clubName,
                         'club_logo' => $clubLogoUrl,
                         'draw_position' => $drawPosition++,
@@ -128,10 +108,10 @@ class ClubTournamentPoolResource extends JsonResource
         ];
     }
 
-    private function imageUrl(?string $path): string
+    private function imageUrl(?string $path): ?string
     {
         if (! $path) {
-            return '';
+            return null;
         }
 
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
