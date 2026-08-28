@@ -6,13 +6,22 @@
 <div class="admin-page">
     <div class="admin-page-header">
         <div class="admin-page-header__left">
-            <a href="{{ route('admin.tournaments.index') }}" class="btn btn-sm btn-outline-secondary mb-3">
-                <i class="mdi mdi-arrow-left me-1"></i> Back
-            </a>
             <h4 class="admin-page-header__title">{{ $tournament->name }}</h4>
             <p class="admin-page-header__subtitle">{{ $tournament->club?->club_name ?? '—' }} · {{ \Illuminate\Support\Str::headline((string) $tournament->format) }}</p>
         </div>
-        <div class="admin-page-header__actions">
+        <div class="admin-page-header__actions d-flex align-items-center gap-2">
+            <a href="{{ route('admin.tournaments.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="mdi mdi-arrow-left me-1"></i> Back
+            </a>
+            <a href="{{ route('admin.tournaments.rules', $tournament) }}" class="btn btn-outline-info btn-sm">
+                <i class="mdi mdi-cogs me-1"></i> Rule View
+            </a>
+            <a href="{{ route('admin.tournaments.pools', $tournament) }}" class="btn btn-outline-primary btn-sm">
+                <i class="mdi mdi-format-list-checks me-1"></i> Pool View
+            </a>
+            <a href="{{ route('admin.tournaments.fixtures', $tournament) }}" class="btn btn-outline-warning btn-sm">
+                <i class="mdi mdi-tournament me-1"></i> Fixture View
+            </a>
             @php
                 $statusMap = [
                     'open' => ['bg-label-success', 'Open'],

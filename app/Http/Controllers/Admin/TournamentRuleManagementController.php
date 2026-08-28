@@ -69,8 +69,20 @@ class TournamentRuleManagementController extends Controller
     public function show(ClubTournamentRule $tournamentRule): View
     {
         $tournamentRule->load(['tournament', 'club']);
+        $tournament = $tournamentRule->tournament;
 
-        return view('content.admin.tournaments.rule-show', compact('tournamentRule'));
+        return view('content.admin.tournaments.rule-show', compact('tournamentRule', 'tournament'));
+    }
+
+    public function showByTournament(Tournament $tournament): View
+    {
+        $tournament->load('club:id,club_name,name,club_logo');
+        $tournamentRule = ClubTournamentRule::where('tournament_id', $tournament->id)->first();
+        if ($tournamentRule) {
+            $tournamentRule->load(['tournament', 'club']);
+        }
+
+        return view('content.admin.tournaments.rule-show', compact('tournament', 'tournamentRule'));
     }
 
     public function destroy(ClubTournamentRule $tournamentRule): RedirectResponse

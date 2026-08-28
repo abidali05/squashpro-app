@@ -11,6 +11,9 @@
         'edit'       => ['class' => 'action-icon-edit',       'icon' => 'mdi-pencil-outline',     'title' => 'Edit'],
         'delete'     => ['class' => 'action-icon-delete',     'icon' => 'mdi-trash-can-outline',  'title' => 'Delete'],
         'permission' => ['class' => 'action-icon-permission', 'icon' => 'mdi-shield-key-outline', 'title' => 'Permissions'],
+        'rules'      => ['class' => 'action-icon-rules',      'icon' => 'mdi-cogs',               'title' => 'Rule View'],
+        'pools'      => ['class' => 'action-icon-pools',      'icon' => 'mdi-format-list-checks', 'title' => 'Pool View'],
+        'fixtures'   => ['class' => 'action-icon-fixtures',   'icon' => 'mdi-tournament',         'title' => 'Fixture View'],
     ][$type] ?? ['class' => 'action-icon-view', 'icon' => 'mdi-eye-outline', 'title' => 'Action'];
 
     $resolvedTitle = $title ?? $config['title'];

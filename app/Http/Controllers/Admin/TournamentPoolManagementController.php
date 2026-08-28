@@ -68,6 +68,7 @@ class TournamentPoolManagementController extends Controller
     public function show(ClubTournamentPool $tournamentPool): View
     {
         $tournamentPool->load(['tournament', 'club']);
+        $tournament = $tournamentPool->tournament;
 
         // Collect all club IDs referenced inside the pools array to display club names nicely
         $allClubIds = [];
@@ -85,7 +86,33 @@ class TournamentPoolManagementController extends Controller
             ->get(['id', 'club_name', 'name', 'club_logo'])
             ->keyBy('id');
 
-        return view('content.admin.tournaments.pool-show', compact('tournamentPool', 'referencedClubs'));
+        return view('content.admin.tournaments.pool-show', compact('tournamentPool', 'tournament', 'referencedClubs'));
+    }
+
+    public function showByTournament(Tournament $tournament): View
+    {
+        $tournament->load('club:id,club_name,name,club_logo');
+        $tournamentPool = ClubTournamentPool::where('tournament_id', $tournament->id)->first();
+        if ($tournamentPool) {
+            $tournamentPool->load(['tournament', 'club']);
+        }
+
+        $allClubIds = [];
+        if ($tournamentPool && is_array($tournamentPool->pools)) {
+            foreach ($tournamentPool->pools as $p) {
+                if (isset($p['club_ids']) && is_array($p['club_ids'])) {
+                    foreach ($p['club_ids'] as $cid) {
+                        $allClubIds[] = (int) $cid;
+                    }
+                }
+            }
+        }
+
+        $referencedClubs = User::whereIn('id', array_unique($allClubIds))
+            ->get(['id', 'club_name', 'name', 'club_logo'])
+            ->keyBy('id');
+
+        return view('content.admin.tournaments.pool-show', compact('tournament', 'tournamentPool', 'referencedClubs'));
     }
 
     public function destroy(ClubTournamentPool $tournamentPool): RedirectResponse

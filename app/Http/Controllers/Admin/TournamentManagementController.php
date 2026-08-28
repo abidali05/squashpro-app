@@ -35,7 +35,12 @@ class TournamentManagementController extends Controller
             ->get(['id', 'club_name', 'name']);
 
         $query = Tournament::query()
-            ->with(['club:id,club_name,name,city,club_logo'])
+            ->with([
+                'club:id,club_name,name,city,club_logo',
+                'clubTournamentRule:id,tournament_id',
+                'clubTournamentPool:id,tournament_id',
+                'fixtures:id,tournament_id',
+            ])
             ->when($search !== '', function (Builder $builder) use ($search) {
                 $builder->where(function (Builder $sub) use ($search) {
                     $sub->where('id', 'like', "%{$search}%")
@@ -87,7 +92,10 @@ class TournamentManagementController extends Controller
             'registrations.player:id,name,email,gender,playing_level',
             'invitations.invitedClub:id,club_name,name,email,phone,city,club_logo',
             'scorers:id,name,email,profile_image',
-            'umpires:id,name,email,profile_image'
+            'umpires:id,name,email,profile_image',
+            'clubTournamentRule:id,tournament_id',
+            'clubTournamentPool:id,tournament_id',
+            'fixtures:id,tournament_id',
         ]);
 
         return view('content.admin.tournaments.show', compact('tournament'));

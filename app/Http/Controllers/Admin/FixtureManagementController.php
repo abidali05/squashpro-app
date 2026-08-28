@@ -95,7 +95,38 @@ class FixtureManagementController extends Controller
             'matches.umpires',
         ]);
 
-        return view('content.admin.tournaments.fixture-show', compact('fixture'));
+        $tournament = $fixture->tournament;
+        $fixtures = collect([$fixture]);
+
+        return view('content.admin.tournaments.fixture-show', compact('fixture', 'tournament', 'fixtures'));
+    }
+
+    public function showByTournament(Tournament $tournament): View
+    {
+        $tournament->load('club:id,club_name,name,club_logo');
+
+        $fixtures = TournamentFixture::query()
+            ->where('tournament_id', $tournament->id)
+            ->with([
+                'group',
+                'homeClub',
+                'awayClub',
+                'byeClub',
+                'restClub',
+                'winnerClub',
+                'court',
+                'matches.homePlayer',
+                'matches.awayPlayer',
+                'matches.winnerPlayer',
+                'matches.court',
+                'matches.scorers',
+                'matches.umpires',
+            ])
+            ->get();
+
+        $fixture = $fixtures->first();
+
+        return view('content.admin.tournaments.fixture-show', compact('tournament', 'fixtures', 'fixture'));
     }
 
     public function destroy(TournamentFixture $fixture): RedirectResponse

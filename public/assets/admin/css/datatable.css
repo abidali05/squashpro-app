@@ -209,7 +209,8 @@
 }
 
 .admin-actions-col {
-  width: 170px;
+  width: 75px;
+  text-align: center;
 }
 
 .admin-sort-link {
@@ -225,14 +226,14 @@
 }
 
 .action-icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 0.25rem;
+  margin-left: 0.15rem;
   background: #f0f4f8;
   color: #1f2937;
   text-decoration: none;
@@ -240,7 +241,7 @@
 }
 
 .action-icon-btn i {
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .action-icon-edit {
@@ -265,6 +266,24 @@
   background: #ecffe5;
   color: #5a8a00;
   border-color: #d5f5bf;
+}
+
+.action-icon-rules {
+  background: #e0f2fe;
+  color: #0284c7;
+  border-color: #bae6fd;
+}
+
+.action-icon-pools {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border-color: #e9d5ff;
+}
+
+.action-icon-fixtures {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #fde68a;
 }
 
 .action-icon-btn:hover {

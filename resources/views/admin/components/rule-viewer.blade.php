@@ -3,18 +3,21 @@
 @endphp
 
 @if(empty($data))
-    <div class="text-muted small py-2">
-        <i class="mdi mdi-information-outline me-1"></i> No rules configured for this section.
+    <div class="text-muted small py-2 d-flex align-items-center gap-2">
+        <i class="mdi mdi-information-outline text-info"></i>
+        <span>No specific configuration added for this section. Standard tournament defaults apply.</span>
     </div>
 @elseif(is_string($data))
-    <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-wrap; line-height: 1.6;">{{ $data }}</div>
+    <div class="p-3 bg-light rounded text-dark small border-start border-3 border-info" style="white-space: pre-wrap; line-height: 1.6; font-size: 0.9rem;">
+        {{ $data }}
+    </div>
 @elseif(is_array($data))
     @if(array_is_list($data))
-        <div class="list-group list-group-flush rounded border mb-0">
+        <div class="list-group list-group-flush rounded border mb-0 shadow-xs">
             @foreach($data as $item)
-                <div class="list-group-item bg-transparent px-3 py-2 text-dark small d-flex align-items-center gap-2">
-                    <i class="mdi mdi-circle-small text-primary fs-5"></i>
-                    <span>{{ is_array($item) ? json_encode($item, JSON_UNESCAPED_SLASHES) : $item }}</span>
+                <div class="list-group-item bg-transparent px-3 py-2.5 text-dark small d-flex align-items-center gap-2">
+                    <i class="mdi mdi-check-circle-outline text-success fs-5"></i>
+                    <span class="fw-semibold">{{ is_array($item) ? json_encode($item, JSON_UNESCAPED_SLASHES) : $item }}</span>
                 </div>
             @endforeach
         </div>
@@ -22,16 +25,16 @@
         <div class="row g-3">
             @foreach($data as $key => $val)
                 <div class="col-sm-6 col-md-4">
-                    <div class="p-3 rounded border bg-light h-100 shadow-xs">
-                        <small class="text-uppercase text-muted fw-bold d-block mb-1" style="font-size: 11px; letter-spacing: 0.5px;">
+                    <div class="p-3 rounded border bg-light h-100 shadow-xs transition-hover">
+                        <small class="text-uppercase text-muted fw-bold d-block mb-1.5" style="font-size: 10.5px; letter-spacing: 0.6px;">
                             {{ Illuminate\Support\Str::headline($key) }}
                         </small>
                         <div class="fw-semibold text-dark fs-6">
                             @if(is_bool($val))
                                 @if($val)
-                                    <span class="badge bg-label-success px-2 py-1"><i class="mdi mdi-check-circle me-1"></i>Yes / Enabled</span>
+                                    <span class="badge bg-label-success px-2.5 py-1 rounded-pill"><i class="mdi mdi-check-circle-outline me-1"></i>Yes / Enabled</span>
                                 @else
-                                    <span class="badge bg-label-secondary px-2 py-1"><i class="mdi mdi-minus-circle me-1"></i>No / Disabled</span>
+                                    <span class="badge bg-label-secondary px-2.5 py-1 rounded-pill"><i class="mdi mdi-minus-circle-outline me-1"></i>No / Disabled</span>
                                 @endif
                             @elseif(is_null($val))
                                 <span class="text-muted">—</span>
@@ -39,7 +42,7 @@
                                 @if(array_is_list($val))
                                     <div class="d-flex flex-wrap gap-1 mt-1">
                                         @foreach($val as $v)
-                                            <span class="badge bg-label-info">{{ is_array($v) ? json_encode($v) : $v }}</span>
+                                            <span class="badge bg-label-primary px-2 py-0.5">{{ is_array($v) ? json_encode($v) : $v }}</span>
                                         @endforeach
                                     </div>
                                 @else
@@ -59,7 +62,7 @@
                                     </div>
                                 @endif
                             @else
-                                {{ $val }}
+                                <span class="text-dark fw-bold">{{ $val }}</span>
                             @endif
                         </div>
                     </div>

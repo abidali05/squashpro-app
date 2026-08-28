@@ -3,68 +3,79 @@
 @section('title', 'Tournament Pool Details')
 
 @section('content')
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-        <h4 class="fw-bold mb-1">
-            <a href="{{ route('admin.tournament-pools.index') }}" class="text-muted fw-normal me-2">
-                <i class="mdi mdi-arrow-left"></i> Tournament Pools /
+@php
+    $tourn = $tournamentPool?->tournament ?? $tournament ?? null;
+    $club = $tournamentPool?->club ?? $tourn?->club ?? null;
+@endphp
+
+<div class="admin-page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h4 class="fw-bold mb-0 text-dark">
+                    {{ $tourn?->name ?? 'Tournament Pools' }}
+                </h4>
+                <span class="badge bg-label-primary px-2.5 py-1 rounded-pill ms-2">
+                    {{ ucfirst(($tournamentPool?->format ?: $tourn?->format) ?: 'Standard') }}
+                </span>
+            </div>
+            <p class="text-muted small mb-0">
+                Host Club: <strong class="text-dark">{{ $club?->club_name ?? $club?->name ?? '—' }}</strong>
+            </p>
+        </div>
+        <div>
+            <a href="{{ route('admin.tournaments.index') }}" class="btn btn-outline-secondary btn-sm shadow-xs">
+                <i class="mdi mdi-arrow-left me-1"></i> Back
             </a>
-            Pools for {{ $tournamentPool->tournament?->name ?? ('Tournament #' . $tournamentPool->tournament_id) }}
-        </h4>
-        <span class="text-muted">Host Club: <strong>{{ $tournamentPool->club?->club_name ?? $tournamentPool->club?->name ?? '—' }}</strong></span>
-    </div>
-    <div>
-        <a href="{{ route('admin.tournament-pools.index') }}" class="btn btn-outline-secondary">
-            <i class="mdi mdi-arrow-left me-1"></i> Back to Pools
-        </a>
+        </div>
     </div>
 </div>
 
 <div class="row">
     <!-- Overview & Basic Details -->
     <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header border-bottom">
-                <h5 class="card-title mb-0">Pool Overview</h5>
+        <div class="card h-100 border shadow-xs">
+            <div class="card-header bg-light border-bottom py-3">
+                <h5 class="card-title mb-0 fw-bold fs-6">
+                    <i class="mdi mdi-format-list-checks text-purple me-2" style="color: #7e22ce;"></i>Pool Overview
+                </h5>
             </div>
             <div class="card-body pt-3">
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Tournament:</div>
-                    <div class="col-7 fw-semibold">
-                        @if($tournamentPool->tournament)
-                            <a href="{{ route('admin.tournaments.show', $tournamentPool->tournament) }}">{{ $tournamentPool->tournament->name }}</a>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-trophy-outline me-1"></i>Tournament:</span>
+                    <span class="fw-semibold text-end">
+                        @if($tourn)
+                            <a href="{{ route('admin.tournaments.show', $tourn) }}" class="text-primary">{{ $tourn->name }}</a>
                         @else
-                            #{{ $tournamentPool->tournament_id }}
+                            —
                         @endif
-                    </div>
+                    </span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Format:</div>
-                    <div class="col-7">
-                        <span class="badge bg-label-primary">{{ ucfirst($tournamentPool->format ?: 'Standard') }}</span>
-                    </div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-shape-outline me-1"></i>Format:</span>
+                    <span class="badge bg-label-info">{{ ucfirst(($tournamentPool?->format ?: $tourn?->format) ?: 'Standard') }}</span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Club:</div>
-                    <div class="col-7 fw-semibold">{{ $tournamentPool->club?->club_name ?? $tournamentPool->club?->name ?? '—' }}</div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-domain me-1"></i>Host Club:</span>
+                    <span class="fw-semibold text-end">{{ $club?->club_name ?? $club?->name ?? '—' }}</span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Pools Status:</div>
-                    <div class="col-7">
-                        @if($tournamentPool->has_pools)
-                            <span class="badge bg-label-success"><i class="mdi mdi-check-circle me-1"></i>Has Pools</span>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-check-circle-outline me-1"></i>Pool Status:</span>
+                    <span>
+                        @if($tournamentPool?->has_pools)
+                            <span class="badge bg-label-success px-2 py-1"><i class="mdi mdi-check-circle me-1"></i>Has Pools</span>
                         @else
-                            <span class="badge bg-label-secondary"><i class="mdi mdi-minus-circle me-1"></i>No Pools</span>
+                            <span class="badge bg-label-secondary px-2 py-1"><i class="mdi mdi-minus-circle me-1"></i>No Pools</span>
                         @endif
-                    </div>
+                    </span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Total Pools:</div>
-                    <div class="col-7 fw-bold">{{ is_array($tournamentPool->pools) ? count($tournamentPool->pools) : 0 }}</div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-counter me-1"></i>Total Pools:</span>
+                    <span class="fw-bold text-dark fs-6">{{ ($tournamentPool && is_array($tournamentPool->pools)) ? count($tournamentPool->pools) : 0 }}</span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Created At:</div>
-                    <div class="col-7">{{ $tournamentPool->created_at ? $tournamentPool->created_at->format('Y-m-d H:i') : '—' }}</div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-calendar-clock me-1"></i>Configured Date:</span>
+                    <span class="text-dark small">{{ $tournamentPool?->created_at ? $tournamentPool->created_at->format('Y-m-d H:i') : '—' }}</span>
                 </div>
             </div>
         </div>
@@ -72,11 +83,11 @@
 
     <!-- Structured Pools Section -->
     <div class="col-md-8 mb-4">
-        @if(is_array($tournamentPool->pools) && count($tournamentPool->pools) > 0)
+        @if($tournamentPool && is_array($tournamentPool->pools) && count($tournamentPool->pools) > 0)
             <div class="row g-3">
                 @foreach($tournamentPool->pools as $pIndex => $p)
                     <div class="col-md-6">
-                        <div class="card h-100 border">
+                        <div class="card h-100 border shadow-xs">
                             <div class="card-header bg-label-primary d-flex align-items-center justify-content-between py-2.5">
                                 <h6 class="card-title mb-0 fw-bold text-primary">
                                     <i class="mdi mdi-format-list-bulleted-type me-1"></i>
@@ -85,13 +96,13 @@
                                 <span class="badge bg-primary">Index #{{ $p['pool_index'] ?? $loop->iteration }}</span>
                             </div>
                             <div class="card-body pt-3">
-                                <small class="text-uppercase text-muted fw-bold d-block mb-2" style="font-size: 11px; letter-spacing: 0.5px;">Assigned Clubs / Teams</small>
+                                <small class="text-uppercase text-muted fw-bold d-block mb-2" style="font-size: 10.5px; letter-spacing: 0.5px;">Assigned Clubs / Teams</small>
                                 
                                 @if(!empty($p['club_ids']) && is_array($p['club_ids']))
                                     <div class="list-group list-group-flush rounded border">
                                         @foreach($p['club_ids'] as $cid)
                                             @php
-                                                $assignedClub = $referencedClubs->get((int)$cid);
+                                                $assignedClub = isset($referencedClubs) ? $referencedClubs->get((int)$cid) : null;
                                             @endphp
                                             <div class="list-group-item px-3 py-2 d-flex align-items-center gap-2">
                                                 @if($assignedClub?->club_logo)
@@ -104,7 +115,7 @@
                                                     </div>
                                                 @endif
                                                 <div>
-                                                    <span class="fw-semibold small d-block">{{ $assignedClub?->club_name ?? $assignedClub?->name ?? ('Club #' . $cid) }}</span>
+                                                    <span class="fw-semibold small d-block text-dark">{{ $assignedClub?->club_name ?? $assignedClub?->name ?? ('Club #' . $cid) }}</span>
                                                 </div>
                                             </div>
                                         @endforeach
@@ -118,10 +129,16 @@
                 @endforeach
             </div>
         @else
-            <div class="card">
-                <div class="card-body text-center py-5 text-muted">
-                    <i class="mdi mdi-format-list-checks d-block mb-2" style="font-size: 32px;"></i>
-                    No pools configured for this tournament yet.
+            <div class="card h-100 border shadow-xs">
+                <div class="card-body text-center py-5">
+                    <div class="mx-auto mb-3 rounded-circle d-flex align-items-center justify-content-center"
+                         style="width:72px; height:72px; background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); border: 1px solid #D8B4FE;">
+                        <i class="mdi mdi-format-list-checks text-purple" style="font-size: 32px; color: #7e22ce;"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-1">No Pools Configured</h5>
+                    <p class="text-muted mb-0 px-md-5" style="max-width: 480px; margin: 0 auto;">
+                        The host club has not configured group stage pools for <strong>{{ $tourn?->name ?? 'this tournament' }}</strong> yet.
+                    </p>
                 </div>
             </div>
         @endif

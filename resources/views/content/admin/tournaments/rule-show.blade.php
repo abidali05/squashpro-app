@@ -3,59 +3,70 @@
 @section('title', 'Tournament Rules Details')
 
 @section('content')
-<div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-        <h4 class="fw-bold mb-1">
-            <a href="{{ route('admin.tournament-rules.index') }}" class="text-muted fw-normal me-2">
-                <i class="mdi mdi-arrow-left"></i> Tournament Rules /
+@php
+    $tourn = $tournamentRule?->tournament ?? $tournament ?? null;
+    $club = $tournamentRule?->club ?? $tourn?->club ?? null;
+@endphp
+
+<div class="admin-page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h4 class="fw-bold mb-0 text-dark">
+                    {{ $tourn?->name ?? 'Tournament Rules' }}
+                </h4>
+                <span class="badge bg-label-primary px-2.5 py-1 rounded-pill ms-2">
+                    {{ ucfirst(($tournamentRule?->tournament_format ?: $tourn?->format) ?: 'Standard') }}
+                </span>
+            </div>
+            <p class="text-muted small mb-0">
+                Host Club: <strong class="text-dark">{{ $club?->club_name ?? $club?->name ?? '—' }}</strong>
+            </p>
+        </div>
+        <div>
+            <a href="{{ route('admin.tournaments.index') }}" class="btn btn-outline-secondary btn-sm shadow-xs">
+                <i class="mdi mdi-arrow-left me-1"></i> Back
             </a>
-            Rules for {{ $tournamentRule->tournament?->name ?? ('Tournament #' . $tournamentRule->tournament_id) }}
-        </h4>
-        <span class="text-muted">Host Club: <strong>{{ $tournamentRule->club?->club_name ?? $tournamentRule->club?->name ?? '—' }}</strong></span>
-    </div>
-    <div>
-        <a href="{{ route('admin.tournament-rules.index') }}" class="btn btn-outline-secondary">
-            <i class="mdi mdi-arrow-left me-1"></i> Back to Rules
-        </a>
+        </div>
     </div>
 </div>
 
 <div class="row">
     <!-- Overview & Basic Details -->
     <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header border-bottom">
-                <h5 class="card-title mb-0">Rule Overview</h5>
+        <div class="card h-100 border shadow-xs">
+            <div class="card-header bg-light border-bottom py-3">
+                <h5 class="card-title mb-0 fw-bold fs-6">
+                    <i class="mdi mdi-book-open-page-variant-outline text-primary me-2"></i>Rule Overview
+                </h5>
             </div>
             <div class="card-body pt-3">
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Tournament:</div>
-                    <div class="col-7 fw-semibold">
-                        @if($tournamentRule->tournament)
-                            <a href="{{ route('admin.tournaments.show', $tournamentRule->tournament) }}">{{ $tournamentRule->tournament->name }}</a>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-trophy-outline me-1"></i>Tournament:</span>
+                    <span class="fw-semibold text-end">
+                        @if($tourn)
+                            <a href="{{ route('admin.tournaments.show', $tourn) }}" class="text-primary">{{ $tourn->name }}</a>
                         @else
-                            #{{ $tournamentRule->tournament_id }}
+                            —
                         @endif
-                    </div>
+                    </span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Format:</div>
-                    <div class="col-7">
-                        <span class="badge bg-label-primary">{{ ucfirst($tournamentRule->tournament_format ?: 'Standard') }}</span>
-                    </div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-shape-outline me-1"></i>Format:</span>
+                    <span class="badge bg-label-info">{{ ucfirst(($tournamentRule?->tournament_format ?: $tourn?->format) ?: 'Standard') }}</span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Club:</div>
-                    <div class="col-7 fw-semibold">{{ $tournamentRule->club?->club_name ?? $tournamentRule->club?->name ?? '—' }}</div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-domain me-1"></i>Host Club:</span>
+                    <span class="fw-semibold text-end">{{ $club?->club_name ?? $club?->name ?? '—' }}</span>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-5 text-muted">Created At:</div>
-                    <div class="col-7">{{ $tournamentRule->created_at ? $tournamentRule->created_at->format('Y-m-d H:i') : '—' }}</div>
+                <div class="detail-row py-2 border-bottom d-flex align-items-center justify-content-between">
+                    <span class="text-muted small"><i class="mdi mdi-calendar-clock me-1"></i>Configured Date:</span>
+                    <span class="text-dark small">{{ $tournamentRule?->created_at ? $tournamentRule->created_at->format('Y-m-d H:i') : '—' }}</span>
                 </div>
-                @if($tournamentRule->note)
-                    <div class="mt-3 p-3 bg-label-secondary rounded">
-                        <small class="fw-bold d-block text-uppercase mb-1 text-muted">Additional Note:</small>
-                        <p class="mb-0 small text-dark">{{ $tournamentRule->note }}</p>
+                @if($tournamentRule?->note)
+                    <div class="mt-3 p-3 bg-label-secondary rounded border border-dashed">
+                        <small class="fw-bold d-block text-uppercase mb-1 text-muted" style="letter-spacing: 0.5px;">Additional Note:</small>
+                        <p class="mb-0 small text-dark" style="white-space: pre-wrap;">{{ $tournamentRule->note }}</p>
                     </div>
                 @endif
             </div>
@@ -64,55 +75,70 @@
 
     <!-- Structured Rules Sections -->
     <div class="col-md-8 mb-4">
-        <div class="card mb-3">
-            <div class="card-header border-bottom">
-                <h5 class="card-title mb-0"><i class="mdi mdi-cogs me-2"></i>Competition Setup & Format Rules</h5>
-            </div>
-            <div class="card-body pt-3">
-                @include('admin.components.rule-viewer', ['rules' => $tournamentRule->competition_setup])
-            </div>
-        </div>
-
-        @if($tournamentRule->pool_rules)
-            <div class="card mb-3">
-                <div class="card-header border-bottom">
-                    <h5 class="card-title mb-0"><i class="mdi mdi-format-list-checks me-2"></i>Pool / Group Stage Rules</h5>
+        @if($tournamentRule)
+            <div class="card mb-3 border shadow-xs">
+                <div class="card-header border-bottom bg-light py-3">
+                    <h5 class="card-title mb-0 fw-bold fs-6"><i class="mdi mdi-cogs text-primary me-2"></i>Competition Setup & Format Rules</h5>
                 </div>
                 <div class="card-body pt-3">
-                    @include('admin.components.rule-viewer', ['rules' => $tournamentRule->pool_rules])
+                    @include('admin.components.rule-viewer', ['rules' => $tournamentRule->competition_setup])
                 </div>
             </div>
-        @endif
 
-        @if($tournamentRule->knockout_rounds)
-            <div class="card mb-3">
-                <div class="card-header border-bottom">
-                    <h5 class="card-title mb-0"><i class="mdi mdi-tournament me-2"></i>Knockout Round Rules</h5>
+            @if($tournamentRule->pool_rules)
+                <div class="card mb-3 border shadow-xs">
+                    <div class="card-header border-bottom bg-light py-3">
+                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="mdi mdi-format-list-checks text-info me-2"></i>Pool / Group Stage Rules</h5>
+                    </div>
+                    <div class="card-body pt-3">
+                        @include('admin.components.rule-viewer', ['rules' => $tournamentRule->pool_rules])
+                    </div>
                 </div>
-                <div class="card-body pt-3">
-                    @include('admin.components.rule-viewer', ['rules' => $tournamentRule->knockout_rounds])
-                </div>
-            </div>
-        @endif
+            @endif
 
-        @if($tournamentRule->match_equipment)
-            <div class="card mb-3">
-                <div class="card-header border-bottom">
-                    <h5 class="card-title mb-0"><i class="mdi mdi-tennis me-2"></i>Match & Equipment Rules</h5>
+            @if($tournamentRule->knockout_rounds)
+                <div class="card mb-3 border shadow-xs">
+                    <div class="card-header border-bottom bg-light py-3">
+                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="mdi mdi-tournament text-purple me-2" style="color:#7e22ce;"></i>Knockout Round Rules</h5>
+                    </div>
+                    <div class="card-body pt-3">
+                        @include('admin.components.rule-viewer', ['rules' => $tournamentRule->knockout_rounds])
+                    </div>
                 </div>
-                <div class="card-body pt-3">
-                    @include('admin.components.rule-viewer', ['rules' => $tournamentRule->match_equipment])
-                </div>
-            </div>
-        @endif
+            @endif
 
-        @if($tournamentRule->scoring_rules)
-            <div class="card mb-3">
-                <div class="card-header border-bottom">
-                    <h5 class="card-title mb-0"><i class="mdi mdi-scoreboard-outline me-2"></i>Scoring System Rules</h5>
+            @if($tournamentRule->match_equipment)
+                <div class="card mb-3 border shadow-xs">
+                    <div class="card-header border-bottom bg-light py-3">
+                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="mdi mdi-tennis text-success me-2"></i>Match & Equipment Rules</h5>
+                    </div>
+                    <div class="card-body pt-3">
+                        @include('admin.components.rule-viewer', ['rules' => $tournamentRule->match_equipment])
+                    </div>
                 </div>
-                <div class="card-body pt-3">
-                    @include('admin.components.rule-viewer', ['rules' => $tournamentRule->scoring_rules])
+            @endif
+
+            @if($tournamentRule->scoring_rules)
+                <div class="card mb-3 border shadow-xs">
+                    <div class="card-header border-bottom bg-light py-3">
+                        <h5 class="card-title mb-0 fw-bold fs-6"><i class="mdi mdi-scoreboard-outline text-warning me-2"></i>Scoring System Rules</h5>
+                    </div>
+                    <div class="card-body pt-3">
+                        @include('admin.components.rule-viewer', ['rules' => $tournamentRule->scoring_rules])
+                    </div>
+                </div>
+            @endif
+        @else
+            <div class="card h-100 border shadow-xs">
+                <div class="card-body text-center py-5">
+                    <div class="mx-auto mb-3 rounded-circle d-flex align-items-center justify-content-center"
+                         style="width:72px; height:72px; background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border: 1px solid #C7D2FE;">
+                        <i class="mdi mdi-cogs text-primary" style="font-size: 32px;"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-1">No Custom Rules Configured</h5>
+                    <p class="text-muted mb-0 px-md-5" style="max-width: 480px; margin: 0 auto;">
+                        The host club has not configured custom rules for <strong>{{ $tourn?->name ?? 'this tournament' }}</strong> yet. Standard tournament defaults apply.
+                    </p>
                 </div>
             </div>
         @endif

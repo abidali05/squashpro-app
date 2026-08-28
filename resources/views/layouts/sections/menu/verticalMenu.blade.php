@@ -77,15 +77,6 @@
                 <li class="menu-item {{ request()->routeIs('admin.tournament-registrations.*') ? 'active' : '' }}">
                     <a href="{{ route('admin.tournament-registrations.index') }}" class="menu-link"><div>Registrations & Teams</div></a>
                 </li>
-                <li class="menu-item {{ request()->routeIs('admin.tournament-rules.*') ? 'active' : '' }}">
-                    <a href="{{ route('admin.tournament-rules.index') }}" class="menu-link"><div>Tournament Rules</div></a>
-                </li>
-                <li class="menu-item {{ request()->routeIs('admin.tournament-pools.*') ? 'active' : '' }}">
-                    <a href="{{ route('admin.tournament-pools.index') }}" class="menu-link"><div>Tournament Pools</div></a>
-                </li>
-                <li class="menu-item {{ request()->routeIs('admin.fixtures.*') ? 'active' : '' }}">
-                    <a href="{{ route('admin.fixtures.index') }}" class="menu-link"><div>Fixtures Management</div></a>
-                </li>
             </ul>
         </li>
 
