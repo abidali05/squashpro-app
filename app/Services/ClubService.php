@@ -1950,12 +1950,12 @@ class ClubService
 
         foreach ($allFixtures as $fixData) {
             $fix = $fixData['fixture'];
-            $homeClubId = isset($fix['home_club_id']) && $fix['home_club_id'] !== null && (int) $fix['home_club_id'] > 0 ? (int) $fix['home_club_id'] : null;
-            $awayClubId = isset($fix['away_club_id']) && $fix['away_club_id'] !== null && (int) $fix['away_club_id'] > 0 ? (int) $fix['away_club_id'] : null;
+            $homeClubId = ! empty($fix['home_club_id']) ? (int) $fix['home_club_id'] : (! empty($fix['home_player_id']) ? (int) $fix['home_player_id'] : null);
+            $awayClubId = ! empty($fix['away_club_id']) ? (int) $fix['away_club_id'] : (! empty($fix['away_player_id']) ? (int) $fix['away_player_id'] : null);
             $isBye = filter_var($fix['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $byeClubId = isset($fix['bye_club_id']) && $fix['bye_club_id'] !== null && (int) $fix['bye_club_id'] > 0 ? (int) $fix['bye_club_id'] : null;
+            $byeClubId = ! empty($fix['bye_club_id']) ? (int) $fix['bye_club_id'] : (! empty($fix['bye_player_id']) ? (int) $fix['bye_player_id'] : (! empty($fix['home_player_id']) ? (int) $fix['home_player_id'] : null));
             $isRest = filter_var($fix['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN);
-            $restClubId = isset($fix['rest_club_id']) && $fix['rest_club_id'] !== null && (int) $fix['rest_club_id'] > 0 ? (int) $fix['rest_club_id'] : null;
+            $restClubId = ! empty($fix['rest_club_id']) ? (int) $fix['rest_club_id'] : (! empty($fix['rest_player_id']) ? (int) $fix['rest_player_id'] : (! empty($fix['home_player_id']) ? (int) $fix['home_player_id'] : null));
             $round = $fix['round'] ?? null;
 
             if (! $round) {
@@ -1969,17 +1969,17 @@ class ClubService
             }
 
             if ($isBye) {
-                if ($awayClubId !== null) {
+                if ($awayClubId !== null && empty($fix['home_placeholder']) && empty($fix['away_placeholder'])) {
                     $this->apiError('Away club must be null for a bye fixture.', 'VALIDATION_ERROR', 422);
                 }
-                if ($byeClubId === null || (! in_array($byeClubId, $participatingClubIds, true) && ! User::where('id', $byeClubId)->exists())) {
+                if ($byeClubId !== null && ! in_array($byeClubId, $participatingClubIds, true) && ! User::where('id', $byeClubId)->exists()) {
                     $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                 }
             } elseif ($isRest) {
-                if ($awayClubId !== null) {
+                if ($awayClubId !== null && empty($fix['home_placeholder']) && empty($fix['away_placeholder'])) {
                     $this->apiError('Away club must be null for a rest fixture.', 'VALIDATION_ERROR', 422);
                 }
-                if ($restClubId === null || (! in_array($restClubId, $participatingClubIds, true) && ! User::where('id', $restClubId)->exists())) {
+                if ($restClubId !== null && ! in_array($restClubId, $participatingClubIds, true) && ! User::where('id', $restClubId)->exists()) {
                     $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                 }
             } else {
@@ -2050,14 +2050,14 @@ class ClubService
                             'tournament_id' => $tournament->id,
                             'group_id' => $group->id,
                             'round' => $fixPay['round'],
-                            'home_club_id' => ! empty($fixPay['home_club_id']) ? (int) $fixPay['home_club_id'] : null,
-                            'away_club_id' => ! empty($fixPay['away_club_id']) ? (int) $fixPay['away_club_id'] : null,
+                            'home_club_id' => ! empty($fixPay['home_club_id']) ? (int) $fixPay['home_club_id'] : (! empty($fixPay['home_player_id']) ? (int) $fixPay['home_player_id'] : null),
+                            'away_club_id' => ! empty($fixPay['away_club_id']) ? (int) $fixPay['away_club_id'] : (! empty($fixPay['away_player_id']) ? (int) $fixPay['away_player_id'] : null),
                             'home_placeholder' => $fixPay['home_placeholder'] ?? null,
                             'away_placeholder' => $fixPay['away_placeholder'] ?? null,
                             'is_bye' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                            'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : null,
+                            'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : (! empty($fixPay['bye_player_id']) ? (int) $fixPay['bye_player_id'] : null),
                             'is_rest' => filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                            'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : null,
+                            'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : (! empty($fixPay['rest_player_id']) ? (int) $fixPay['rest_player_id'] : null),
                             'court_id' => ! empty($fixPay['court_id']) ? (int) $fixPay['court_id'] : null,
                             'status' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'bye' : (filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'rest' : 'scheduled'),
                         ]);
@@ -2097,17 +2097,17 @@ class ClubService
                         'tournament_id' => $tournament->id,
                         'group_id' => null,
                         'round' => $fixPay['round'],
-                        'home_club_id' => ! empty($fixPay['home_club_id']) ? (int) $fixPay['home_club_id'] : null,
-                        'away_club_id' => ! empty($fixPay['away_club_id']) ? (int) $fixPay['away_club_id'] : null,
+                        'home_club_id' => ! empty($fixPay['home_club_id']) ? (int) $fixPay['home_club_id'] : (! empty($fixPay['home_player_id']) ? (int) $fixPay['home_player_id'] : null),
+                        'away_club_id' => ! empty($fixPay['away_club_id']) ? (int) $fixPay['away_club_id'] : (! empty($fixPay['away_player_id']) ? (int) $fixPay['away_player_id'] : null),
                         'home_placeholder' => $fixPay['home_placeholder'] ?? null,
                         'away_placeholder' => $fixPay['away_placeholder'] ?? null,
                         'is_bye' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                        'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : null,
+                        'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : (! empty($fixPay['bye_player_id']) ? (int) $fixPay['bye_player_id'] : null),
                         'is_rest' => filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                        'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : null,
+                        'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : (! empty($fixPay['rest_player_id']) ? (int) $fixPay['rest_player_id'] : null),
                         'court_id' => ! empty($fixPay['court_id']) ? (int) $fixPay['court_id'] : null,
                         'status' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'bye' : (filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'rest' : 'scheduled'),
-                    ])
+                    ]);
 
                     $matchesPay = $fixPay['matches'] ?? [];
                     foreach ($matchesPay as $matchPay) {
