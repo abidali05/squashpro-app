@@ -629,6 +629,10 @@ class ClubService
     {
         $tournament = $this->findClubTournament($club, $tournamentId);
 
+        if (! empty($data['format'])) {
+            $tournament->update(['format' => $data['format']]);
+        }
+
         return ClubTournamentPool::updateOrCreate(
             ['tournament_id' => $tournament->id],
             [
@@ -1959,8 +1963,8 @@ class ClubService
             }
 
             if ($homeClubId !== null) {
-                if (! in_array($homeClubId, $participatingClubIds, true)) {
-                    $this->apiError('Fixture club must be a participating club in this tournament.', 'VALIDATION_ERROR', 422);
+                if (! in_array($homeClubId, $participatingClubIds, true) && ! User::where('id', $homeClubId)->exists()) {
+                    $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                 }
             }
 
@@ -1968,20 +1972,20 @@ class ClubService
                 if ($awayClubId !== null) {
                     $this->apiError('Away club must be null for a bye fixture.', 'VALIDATION_ERROR', 422);
                 }
-                if ($byeClubId === null || ! in_array($byeClubId, $participatingClubIds, true)) {
-                    $this->apiError('Fixture club must be a participating club in this tournament.', 'VALIDATION_ERROR', 422);
+                if ($byeClubId === null || (! in_array($byeClubId, $participatingClubIds, true) && ! User::where('id', $byeClubId)->exists())) {
+                    $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                 }
             } elseif ($isRest) {
                 if ($awayClubId !== null) {
                     $this->apiError('Away club must be null for a rest fixture.', 'VALIDATION_ERROR', 422);
                 }
-                if ($restClubId === null || ! in_array($restClubId, $participatingClubIds, true)) {
-                    $this->apiError('Fixture club must be a participating club in this tournament.', 'VALIDATION_ERROR', 422);
+                if ($restClubId === null || (! in_array($restClubId, $participatingClubIds, true) && ! User::where('id', $restClubId)->exists())) {
+                    $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                 }
             } else {
                 if ($awayClubId !== null) {
-                    if (! in_array($awayClubId, $participatingClubIds, true)) {
-                        $this->apiError('Fixture club must be a participating club in this tournament.', 'VALIDATION_ERROR', 422);
+                    if (! in_array($awayClubId, $participatingClubIds, true) && ! User::where('id', $awayClubId)->exists()) {
+                        $this->apiError('Fixture club must be a participating club or valid user in this tournament.', 'VALIDATION_ERROR', 422);
                     }
                 }
             }
@@ -2010,13 +2014,13 @@ class ClubService
                     }
                     $sequences[] = $seq;
 
-                    if ($homePlayerId !== null && $homeClubId !== null) {
+                    if ($homePlayerId !== null && $homeClubId !== null && isset($rosters[$homeClubId])) {
                         $homeRoster = $rosters[$homeClubId] ?? [];
                         if (! empty($homeRoster) && ! in_array($homePlayerId, $homeRoster, true)) {
                             $this->apiError("Player ID {$homePlayerId} does not belong to the submitted roster of club {$homeClubId}.", 'VALIDATION_ERROR', 422);
                         }
                     }
-                    if ($awayPlayerId !== null && $awayClubId !== null) {
+                    if ($awayPlayerId !== null && $awayClubId !== null && isset($rosters[$awayClubId])) {
                         $awayRoster = $rosters[$awayClubId] ?? [];
                         if (! empty($awayRoster) && ! in_array($awayPlayerId, $awayRoster, true)) {
                             $this->apiError("Player ID {$awayPlayerId} does not belong to the submitted roster of club {$awayClubId}.", 'VALIDATION_ERROR', 422);
@@ -2061,9 +2065,6 @@ class ClubService
                         $matchesPay = $fixPay['matches'] ?? [];
                         foreach ($matchesPay as $matchPay) {
                             $vId = ! empty($matchPay['venue_id']) ? (int) $matchPay['venue_id'] : null;
-                            if ($vId && ! User::where('id', $vId)->exists()) {
-                                $vId = null;
-                            }
                             $cId = ! empty($matchPay['court_id']) ? (int) $matchPay['court_id'] : null;
 
                             $match = TournamentMatch::create([
@@ -2111,9 +2112,6 @@ class ClubService
                     $matchesPay = $fixPay['matches'] ?? [];
                     foreach ($matchesPay as $matchPay) {
                         $vId = ! empty($matchPay['venue_id']) ? (int) $matchPay['venue_id'] : null;
-                        if ($vId && ! User::where('id', $vId)->exists()) {
-                            $vId = null;
-                        }
                         $cId = ! empty($matchPay['court_id']) ? (int) $matchPay['court_id'] : null;
 
                         $match = TournamentMatch::create([
@@ -2194,6 +2192,10 @@ class ClubService
                 $fMatches[] = [
                     'match_id' => (int) $m->id,
                     'sequence' => (int) $m->sequence,
+                    'home_player_id' => $m->home_player_id ? (int) $m->home_player_id : null,
+                    'away_player_id' => $m->away_player_id ? (int) $m->away_player_id : null,
+                    'home_player_placeholder' => $m->home_player_placeholder,
+                    'away_player_placeholder' => $m->away_player_placeholder,
                     'home_player' => $homePlayer,
                     'away_player' => $awayPlayer,
                     'status' => $m->status,
@@ -2251,6 +2253,10 @@ class ClubService
             $fixData = [
                 'fixture_id' => (int) $f->id,
                 'round' => $f->round,
+                'home_club_id' => $f->home_club_id ? (int) $f->home_club_id : null,
+                'away_club_id' => $f->away_club_id ? (int) $f->away_club_id : null,
+                'home_placeholder' => $f->home_placeholder,
+                'away_placeholder' => $f->away_placeholder,
                 'home_club' => $homeClub,
                 'away_club' => $awayClub,
                 'status' => $f->status,

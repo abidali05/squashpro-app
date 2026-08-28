@@ -294,7 +294,7 @@ class ClubController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Tournament pools retrieved successfully',
+            'message' => 'Tournament pools retrieved successfully.',
             'data' => $pools ? new ClubTournamentPoolResource($pools) : null,
         ]);
     }
@@ -467,7 +467,7 @@ class ClubController extends Controller
             'groups' => ['nullable', 'array'],
             'groups.*.group_name' => ['required_if:format,league', 'string', 'max:100'],
             'groups.*.club_ids' => ['nullable', 'array'],
-            'groups.*.club_ids.*' => ['nullable', 'integer', 'exists:users,id'],
+            'groups.*.club_ids.*' => ['nullable', 'integer'],
             'groups.*.fixtures' => ['nullable', 'array'],
             'groups.*.fixtures.*.round' => ['required', 'string', 'max:100'],
             'groups.*.fixtures.*.home_club_id' => ['nullable', 'integer'],
@@ -478,7 +478,7 @@ class ClubController extends Controller
             'groups.*.fixtures.*.bye_club_id' => ['nullable', 'integer'],
             'groups.*.fixtures.*.is_rest' => ['nullable', 'boolean'],
             'groups.*.fixtures.*.rest_club_id' => ['nullable', 'integer'],
-            'groups.*.fixtures.*.court_id' => ['nullable', 'integer', 'exists:courts,id'],
+            'groups.*.fixtures.*.court_id' => ['nullable', 'integer'],
             'groups.*.fixtures.*.matches' => ['nullable', 'array'],
             'groups.*.fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
             'groups.*.fixtures.*.matches.*.home_player_id' => ['nullable', 'integer'],
@@ -486,13 +486,13 @@ class ClubController extends Controller
             'groups.*.fixtures.*.matches.*.home_player_placeholder' => ['nullable', 'string', 'max:100'],
             'groups.*.fixtures.*.matches.*.away_player_placeholder' => ['nullable', 'string', 'max:100'],
             'groups.*.fixtures.*.matches.*.venue_id' => ['nullable', 'integer'],
-            'groups.*.fixtures.*.matches.*.court_id' => ['nullable', 'integer', 'exists:courts,id'],
+            'groups.*.fixtures.*.matches.*.court_id' => ['nullable', 'integer'],
             'groups.*.fixtures.*.matches.*.start_date' => ['nullable', 'string'],
             'groups.*.fixtures.*.matches.*.start_time' => ['nullable', 'string'],
             'groups.*.fixtures.*.matches.*.scorer_ids' => ['nullable', 'array'],
-            'groups.*.fixtures.*.matches.*.scorer_ids.*' => ['integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.scorer_ids.*' => ['integer'],
             'groups.*.fixtures.*.matches.*.umpire_ids' => ['nullable', 'array'],
-            'groups.*.fixtures.*.matches.*.umpire_ids.*' => ['integer', 'exists:users,id'],
+            'groups.*.fixtures.*.matches.*.umpire_ids.*' => ['integer'],
             
             // Knockout fields
             'fixtures' => ['nullable', 'array'],
@@ -505,7 +505,7 @@ class ClubController extends Controller
             'fixtures.*.bye_club_id' => ['nullable', 'integer'],
             'fixtures.*.is_rest' => ['nullable', 'boolean'],
             'fixtures.*.rest_club_id' => ['nullable', 'integer'],
-            'fixtures.*.court_id' => ['nullable', 'integer', 'exists:courts,id'],
+            'fixtures.*.court_id' => ['nullable', 'integer'],
             'fixtures.*.matches' => ['nullable', 'array'],
             'fixtures.*.matches.*.sequence' => ['required', 'integer', 'min:1'],
             'fixtures.*.matches.*.home_player_id' => ['nullable', 'integer'],
@@ -513,13 +513,13 @@ class ClubController extends Controller
             'fixtures.*.matches.*.home_player_placeholder' => ['nullable', 'string', 'max:100'],
             'fixtures.*.matches.*.away_player_placeholder' => ['nullable', 'string', 'max:100'],
             'fixtures.*.matches.*.venue_id' => ['nullable', 'integer'],
-            'fixtures.*.matches.*.court_id' => ['nullable', 'integer', 'exists:courts,id'],
+            'fixtures.*.matches.*.court_id' => ['nullable', 'integer'],
             'fixtures.*.matches.*.start_date' => ['nullable', 'string'],
             'fixtures.*.matches.*.start_time' => ['nullable', 'string'],
             'fixtures.*.matches.*.scorer_ids' => ['nullable', 'array'],
-            'fixtures.*.matches.*.scorer_ids.*' => ['integer', 'exists:users,id'],
+            'fixtures.*.matches.*.scorer_ids.*' => ['integer'],
             'fixtures.*.matches.*.umpire_ids' => ['nullable', 'array'],
-            'fixtures.*.matches.*.umpire_ids.*' => ['integer', 'exists:users,id'],
+            'fixtures.*.matches.*.umpire_ids.*' => ['integer'],
         ]);
 
         $this->clubService->storeFixtures($request->user(), $tournament_id, $validated);

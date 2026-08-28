@@ -8,90 +8,93 @@ use App\Models\TournamentTeamPlayer;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class ClubTournamentPoolResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $tournament = $this->tournament;
         $poolsPayload = $this->pools ?? [];
-
-        $totalTeams = 0;
         $formattedPools = [];
 
         foreach ($poolsPayload as $poolData) {
             $poolName = $poolData['pool_name'] ?? '';
-            $poolIndex = (int) ($poolData['pool_index'] ?? 0);
-            $clubIds = array_map('intval', (array) ($poolData['club_ids'] ?? []));
+            $clubIds = isset($poolData['club_ids']) && is_array($poolData['club_ids']) ? array_map('intval', $poolData['club_ids']) : [];
+            $playerIds = isset($poolData['player_ids']) && is_array($poolData['player_ids']) ? array_map('intval', $poolData['player_ids']) : [];
 
             $teams = [];
             $drawPosition = 1;
 
-            foreach ($clubIds as $clubId) {
-                $totalTeams++;
-                $clubUser = User::find($clubId);
+            if (! empty($playerIds)) {
+                foreach ($playerIds as $pid) {
+                    $pUser = User::find($pid);
 
-                $clubName = $clubUser?->club_name ?? $clubUser?->name ?? "Club #{$clubId}";
-                $clubLogoPath = $clubUser?->club_logo ?? $clubUser?->profile_image;
-                $clubLogoUrl = $this->imageUrl($clubLogoPath);
+                    $name = $pUser?->name ?? "Player #{$pid}";
+                    $img = $this->imageUrl($pUser?->profile_image);
 
-                // Fetch submitted team for this tournament and club
-                $teamRecord = TournamentTeam::where('tournament_id', $this->tournament_id)
-                    ->where('club_id', $clubId)
-                    ->first();
+                    $teams[] = [
+                        'club_id' => $pid,
+                        'club_name' => $name,
+                        'club_logo' => $img,
+                        'draw_position' => $drawPosition++,
+                        'players' => [
+                            [
+                                'player_id' => $pid,
+                                'name' => $name,
+                                'profile_image' => $img,
+                            ],
+                        ],
+                    ];
+                }
+            } elseif (! empty($clubIds)) {
+                foreach ($clubIds as $clubId) {
+                    $clubUser = User::find($clubId);
 
-                $playersList = [];
+                    $clubName = $clubUser?->club_name ?? $clubUser?->name ?? "Club #{$clubId}";
+                    $clubLogoUrl = $this->imageUrl($clubUser?->club_logo ?? $clubUser?->profile_image);
 
-                if ($teamRecord) {
-                    $teamPlayers = TournamentTeamPlayer::where('team_id', $teamRecord->id)
-                        ->with('player')
-                        ->orderBy('position', 'asc')
-                        ->get();
+                    $teamRecord = TournamentTeam::where('tournament_id', $this->tournament_id)
+                        ->where('club_id', $clubId)
+                        ->first();
 
-                    foreach ($teamPlayers as $tp) {
-                        $pUser = $tp->player;
-                        if ($pUser) {
-                            $membership = ClubMembership::where('club_id', $clubId)
-                                ->where('player_id', $pUser->id)
-                                ->where('status', 'approved')
-                                ->first();
+                    $playersList = [];
 
-                            $playersList[] = [
-                                'player_id' => $pUser->id,
-                                'full_name' => $pUser->name,
-                                'profile_image' => $this->imageUrl($pUser->profile_image),
-                                'level' => $pUser->playing_level ?? $pUser->player_level ?? '',
-                                'membership_number' => $membership?->membership_number ?? '',
-                            ];
+                    if ($teamRecord) {
+                        $teamPlayers = TournamentTeamPlayer::where('team_id', $teamRecord->id)
+                            ->with('player')
+                            ->orderBy('position', 'asc')
+                            ->get();
+
+                        foreach ($teamPlayers as $tp) {
+                            $pUser = $tp->player;
+                            if ($pUser) {
+                                $playersList[] = [
+                                    'player_id' => $pUser->id,
+                                    'name' => $pUser->name,
+                                    'profile_image' => $this->imageUrl($pUser->profile_image),
+                                ];
+                            }
                         }
                     }
-                }
 
-                $teams[] = [
-                    'draw_position' => $drawPosition++,
-                    'club_id' => $clubId,
-                    'club_name' => $clubName,
-                    'club_logo' => $clubLogoUrl,
-                    'player_count' => count($playersList),
-                    'players' => $playersList,
-                ];
+                    $teams[] = [
+                        'club_id' => $clubId,
+                        'club_name' => $clubName,
+                        'club_logo' => $clubLogoUrl,
+                        'draw_position' => $drawPosition++,
+                        'players' => $playersList,
+                    ];
+                }
             }
 
             $formattedPools[] = [
                 'pool_name' => $poolName,
-                'pool_index' => $poolIndex,
-                'team_count' => count($teams),
                 'teams' => $teams,
             ];
         }
 
         return [
             'tournament_id' => (int) $this->tournament_id,
-            'tournament_name' => $tournament?->name ?? '',
-            'format' => $this->format,
-            'has_pools' => (bool) $this->has_pools,
-            'total_pools' => count($formattedPools),
-            'total_teams' => $totalTeams,
             'pools' => $formattedPools,
         ];
     }
@@ -106,6 +109,6 @@ class ClubTournamentPoolResource extends JsonResource
             return $path;
         }
 
-        return asset('storage/' . $path);
+        return Storage::disk('public')->url($path);
     }
 }

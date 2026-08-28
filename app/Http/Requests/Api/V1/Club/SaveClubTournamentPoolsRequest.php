@@ -19,8 +19,10 @@ class SaveClubTournamentPoolsRequest extends FormRequest
             'pools' => ['required', 'array', 'min:1'],
             'pools.*.pool_name' => ['required', 'string'],
             'pools.*.pool_index' => ['required', 'integer'],
-            'pools.*.club_ids' => ['required', 'array'],
-            'pools.*.club_ids.*' => ['required', 'integer'],
+            'pools.*.club_ids' => ['nullable', 'array'],
+            'pools.*.club_ids.*' => ['integer'],
+            'pools.*.player_ids' => ['nullable', 'array'],
+            'pools.*.player_ids.*' => ['integer'],
         ];
     }
 }
