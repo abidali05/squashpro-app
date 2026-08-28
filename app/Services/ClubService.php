@@ -2336,8 +2336,11 @@ class ClubService
             }
         }
 
+        $tournamentType = $tournament->tournament_type ?? ($tournament->opponent_club_id ? 'CLUB_TO_CLUB' : 'CLUB_MEMBERS_ONLY');
+
         return [
             'tournament_id' => (int) $tournament->id,
+            'tournament_type' => $tournamentType,
             'format' => $format,
             'group_count' => $format === 'league' ? count($groups) : null,
             'groups' => $groups,
