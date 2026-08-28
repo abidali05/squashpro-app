@@ -738,4 +738,88 @@ class TournamentFixtureTest extends TestCase
         $getResponse->assertJsonPath('data.groups.1.fixtures.0.is_rest', true);
         $getResponse->assertJsonPath('data.groups.1.fixtures.0.rest_club_id', $this->opponentClub2->id);
     }
+
+    public function test_can_store_and_retrieve_court_id_in_fixtures_and_matches(): void
+    {
+        $court = \App\Models\Court::create([
+            'club_id' => $this->hostClub->id,
+            'name' => 'Center Court',
+            'type' => 'glass',
+            'price_per_hour' => 50,
+            'capacity' => 2,
+            'status' => 'active',
+        ]);
+
+        $tournament = Tournament::create([
+            'club_id' => $this->hostClub->id,
+            'opponent_club_id' => [$this->opponentClub1->id],
+            'name' => 'Court ID Test Tournament',
+            'format' => 'Knockout',
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'gender' => 'OPEN',
+            'player_level' => ['BEGINNER'],
+            'age_group' => '15-35',
+            'maximum_players' => 10,
+            'status' => 'open',
+            'start_date' => '2026-08-20',
+            'end_date' => '2026-08-22',
+            'registration_deadline' => '2026-08-15T18:00:00Z',
+        ]);
+
+        TournamentInvitation::create([
+            'tournament_id' => $tournament->id,
+            'invited_club_id' => $this->opponentClub1->id,
+            'status' => 'accepted',
+        ]);
+
+        $this->setupRosters($tournament);
+
+        $payload = [
+            'format' => 'knockout',
+            'fixtures' => [
+                [
+                    'round' => 'Final',
+                    'home_club_id' => $this->hostClub->id,
+                    'away_club_id' => $this->opponentClub1->id,
+                    'court_id' => $court->id,
+                    'matches' => [
+                        [
+                            'sequence' => 1,
+                            'home_player_id' => $this->hostPlayer1->id,
+                            'away_player_id' => $this->oppPlayer1->id,
+                            'court_id' => $court->id,
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $response = $this->postJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            $payload,
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('tournament_fixtures', [
+            'tournament_id' => $tournament->id,
+            'court_id' => $court->id,
+        ]);
+
+        $this->assertDatabaseHas('tournament_matches', [
+            'court_id' => $court->id,
+        ]);
+
+        $getResponse = $this->getJson(
+            "/api/v1/club/tournaments/{$tournament->id}/fixtures",
+            ['Authorization' => "Bearer {$this->hostToken}"]
+        );
+
+        $getResponse->assertStatus(200);
+        $getResponse->assertJsonPath('data.fixtures.0.court_id', $court->id);
+        $getResponse->assertJsonPath('data.fixtures.0.court.name', 'Center Court');
+        $getResponse->assertJsonPath('data.fixtures.0.matches.0.court_id', $court->id);
+        $getResponse->assertJsonPath('data.fixtures.0.matches.0.court.name', 'Center Court');
+    }
 }

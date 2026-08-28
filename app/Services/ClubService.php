@@ -2054,6 +2054,7 @@ class ClubService
                             'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : null,
                             'is_rest' => filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN),
                             'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : null,
+                            'court_id' => ! empty($fixPay['court_id']) ? (int) $fixPay['court_id'] : null,
                             'status' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'bye' : (filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'rest' : 'scheduled'),
                         ]);
 
@@ -2063,6 +2064,7 @@ class ClubService
                             if ($vId && ! User::where('id', $vId)->exists()) {
                                 $vId = null;
                             }
+                            $cId = ! empty($matchPay['court_id']) ? (int) $matchPay['court_id'] : null;
 
                             $match = TournamentMatch::create([
                                 'fixture_id' => $fixture->id,
@@ -2072,6 +2074,7 @@ class ClubService
                                 'home_player_placeholder' => $matchPay['home_player_placeholder'] ?? null,
                                 'away_player_placeholder' => $matchPay['away_player_placeholder'] ?? null,
                                 'venue_id' => $vId,
+                                'court_id' => $cId,
                                 'start_date' => $matchPay['start_date'] ?? null,
                                 'start_time' => $matchPay['start_time'] ?? null,
                                 'status' => 'scheduled',
@@ -2101,6 +2104,7 @@ class ClubService
                         'bye_club_id' => ! empty($fixPay['bye_club_id']) ? (int) $fixPay['bye_club_id'] : null,
                         'is_rest' => filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN),
                         'rest_club_id' => ! empty($fixPay['rest_club_id']) ? (int) $fixPay['rest_club_id'] : null,
+                        'court_id' => ! empty($fixPay['court_id']) ? (int) $fixPay['court_id'] : null,
                         'status' => filter_var($fixPay['is_bye'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'bye' : (filter_var($fixPay['is_rest'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 'rest' : 'scheduled'),
                     ]);
 
@@ -2110,6 +2114,7 @@ class ClubService
                         if ($vId && ! User::where('id', $vId)->exists()) {
                             $vId = null;
                         }
+                        $cId = ! empty($matchPay['court_id']) ? (int) $matchPay['court_id'] : null;
 
                         $match = TournamentMatch::create([
                             'fixture_id' => $fixture->id,
@@ -2119,6 +2124,7 @@ class ClubService
                             'home_player_placeholder' => $matchPay['home_player_placeholder'] ?? null,
                             'away_player_placeholder' => $matchPay['away_player_placeholder'] ?? null,
                             'venue_id' => $vId,
+                            'court_id' => $cId,
                             'start_date' => $matchPay['start_date'] ?? null,
                             'start_time' => $matchPay['start_time'] ?? null,
                             'status' => 'scheduled',
@@ -2176,6 +2182,15 @@ class ClubService
                     ];
                 }
 
+                $courtData = null;
+                if ($m->court_id && $m->court) {
+                    $courtData = [
+                        'court_id' => (int) $m->court->id,
+                        'name' => $m->court->name,
+                        'type' => $m->court->type,
+                    ];
+                }
+
                 $fMatches[] = [
                     'match_id' => (int) $m->id,
                     'sequence' => (int) $m->sequence,
@@ -2185,6 +2200,8 @@ class ClubService
                     'score' => $m->score,
                     'winner_player_id' => $m->winner_player_id ? (int) $m->winner_player_id : null,
                     'venue_id' => $m->venue_id ? (int) $m->venue_id : null,
+                    'court_id' => $m->court_id ? (int) $m->court_id : null,
+                    'court' => $courtData,
                     'start_date' => $m->start_date ? (is_string($m->start_date) ? $m->start_date : $m->start_date->format('Y-m-d')) : null,
                     'start_time' => $m->start_time,
                     'scorer_ids' => $m->scorers->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
@@ -2222,6 +2239,15 @@ class ClubService
                 ];
             }
 
+            $fixtureCourtData = null;
+            if ($f->court_id && $f->court) {
+                $fixtureCourtData = [
+                    'court_id' => (int) $f->court->id,
+                    'name' => $f->court->name,
+                    'type' => $f->court->type,
+                ];
+            }
+
             $fixData = [
                 'fixture_id' => (int) $f->id,
                 'round' => $f->round,
@@ -2230,6 +2256,8 @@ class ClubService
                 'status' => $f->status,
                 'is_bye' => (bool) $f->is_bye,
                 'is_rest' => (bool) $f->is_rest,
+                'court_id' => $f->court_id ? (int) $f->court_id : null,
+                'court' => $fixtureCourtData,
             ];
 
             if ($f->is_bye) {
@@ -2255,7 +2283,7 @@ class ClubService
 
         if ($format === 'league') {
             $savedGroups = TournamentGroup::where('tournament_id', $tournament->id)
-                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id', 'fixtures.matches.umpires:id'])
+                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id', 'fixtures.matches.umpires:id'])
                 ->get();
 
             foreach ($savedGroups as $g) {
@@ -2282,7 +2310,7 @@ class ClubService
         } else {
             $savedFixtures = TournamentFixture::where('tournament_id', $tournament->id)
                 ->whereNull('group_id')
-                ->with(['homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id', 'matches.umpires:id'])
+                ->with(['court:id,name,type', 'homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.court:id,name,type', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id', 'matches.umpires:id'])
                 ->get();
 
             foreach ($savedFixtures as $f) {

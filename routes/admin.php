@@ -13,6 +13,9 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PlayerController;
 use App\Http\Controllers\Admin\MembershipManagementController;
 use App\Http\Controllers\Admin\TournamentRegistrationController;
+use App\Http\Controllers\Admin\TournamentRuleManagementController;
+use App\Http\Controllers\Admin\TournamentPoolManagementController;
+use App\Http\Controllers\Admin\FixtureManagementController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BookingReviewManagementController;
 use App\Http\Controllers\Admin\ReportController;
@@ -87,6 +90,21 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('tournament-registrations', [TournamentRegistrationController::class, 'index'])->name('tournament-registrations.index');
         Route::post('tournament-registrations/{registration}/approve', [TournamentRegistrationController::class, 'approve'])->name('tournament-registrations.approve');
         Route::delete('tournament-registrations/{registration}', [TournamentRegistrationController::class, 'destroy'])->name('tournament-registrations.destroy');
+
+        // Tournament Rules Management
+        Route::get('tournament-rules', [TournamentRuleManagementController::class, 'index'])->name('tournament-rules.index');
+        Route::get('tournament-rules/{tournamentRule}', [TournamentRuleManagementController::class, 'show'])->name('tournament-rules.show');
+        Route::delete('tournament-rules/{tournamentRule}', [TournamentRuleManagementController::class, 'destroy'])->name('tournament-rules.destroy');
+
+        // Tournament Pools Management
+        Route::get('tournament-pools', [TournamentPoolManagementController::class, 'index'])->name('tournament-pools.index');
+        Route::get('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'show'])->name('tournament-pools.show');
+        Route::delete('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'destroy'])->name('tournament-pools.destroy');
+
+        // Fixtures Management
+        Route::get('fixtures', [FixtureManagementController::class, 'index'])->name('fixtures.index');
+        Route::get('fixtures/{fixture}', [FixtureManagementController::class, 'show'])->name('fixtures.show');
+        Route::delete('fixtures/{fixture}', [FixtureManagementController::class, 'destroy'])->name('fixtures.destroy');
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('revenue-reports', [RevenueReportController::class, 'index'])->name('revenue.index');
         Route::get('notifications', [NotificationManagementController::class, 'index'])->name('notifications.index');

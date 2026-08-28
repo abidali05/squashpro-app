@@ -19,6 +19,7 @@ class TournamentMatch extends Model
         'home_player_placeholder',
         'away_player_placeholder',
         'venue_id',
+        'court_id',
         'start_date',
         'start_time',
         'status',
@@ -29,6 +30,11 @@ class TournamentMatch extends Model
     public function fixture(): BelongsTo
     {
         return $this->belongsTo(TournamentFixture::class, 'fixture_id');
+    }
+
+    public function court(): BelongsTo
+    {
+        return $this->belongsTo(Court::class, 'court_id');
     }
 
     public function homePlayer(): BelongsTo

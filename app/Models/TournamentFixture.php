@@ -23,6 +23,7 @@ class TournamentFixture extends Model
         'bye_club_id',
         'is_rest',
         'rest_club_id',
+        'court_id',
         'status',
         'winner_club_id',
     ];
@@ -40,6 +41,11 @@ class TournamentFixture extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(TournamentGroup::class, 'group_id');
+    }
+
+    public function court(): BelongsTo
+    {
+        return $this->belongsTo(Court::class, 'court_id');
     }
 
     public function homeClub(): BelongsTo

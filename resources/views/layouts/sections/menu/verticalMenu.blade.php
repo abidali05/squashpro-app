@@ -65,7 +65,7 @@
             </ul>
         </li>
 
-        <li class="menu-item {{ request()->routeIs('admin.tournaments.*') || request()->routeIs('admin.tournament-registrations.*') ? 'open' : '' }}">
+        <li class="menu-item {{ request()->routeIs('admin.tournaments.*') || request()->routeIs('admin.tournament-registrations.*') || request()->routeIs('admin.tournament-rules.*') || request()->routeIs('admin.tournament-pools.*') || request()->routeIs('admin.fixtures.*') ? 'open' : '' }}">
             <a href="#" class="menu-link menu-toggle">
                 <i class="menu-icon tf-icons mdi mdi-trophy-outline"></i>
                 <div>Tournament Management</div>
@@ -76,6 +76,15 @@
                 </li>
                 <li class="menu-item {{ request()->routeIs('admin.tournament-registrations.*') ? 'active' : '' }}">
                     <a href="{{ route('admin.tournament-registrations.index') }}" class="menu-link"><div>Registrations & Teams</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.tournament-rules.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tournament-rules.index') }}" class="menu-link"><div>Tournament Rules</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.tournament-pools.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.tournament-pools.index') }}" class="menu-link"><div>Tournament Pools</div></a>
+                </li>
+                <li class="menu-item {{ request()->routeIs('admin.fixtures.*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.fixtures.index') }}" class="menu-link"><div>Fixtures Management</div></a>
                 </li>
             </ul>
         </li>

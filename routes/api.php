@@ -24,6 +24,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/cities', [PublicCityController::class, 'index']);
     Route::get('/clubs', [PublicClubController::class, 'index']);
+    Route::get('/clubs/{club_id}/courts', [PublicClubController::class, 'courts']);
+    Route::get('/courts/{club_id}', [PublicClubController::class, 'courts']);
     Route::get('/players', [PublicPlayerController::class, 'index']);
     Route::get('/help-support', [PlayerContentController::class, 'helpSupport']);
     Route::get('/privacy-policy', [PlayerContentController::class, 'privacyPolicy']);

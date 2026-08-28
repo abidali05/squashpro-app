@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\PublicClubResource;
+use App\Http\Resources\Api\V1\PublicCourtResource;
+use App\Models\Court;
 use App\Models\User;
 use App\Support\ApiErrorCode;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +76,30 @@ class PublicClubController extends Controller
                 'from' => $paginator->firstItem(),
                 'to' => $paginator->lastItem(),
             ],
+        ]);
+    }
+
+    public function courts(string $club_id): JsonResponse
+    {
+        $club = User::where('role', 'club')->find($club_id);
+
+        if (!$club) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Club not found.',
+                'error_code' => ApiErrorCode::CLUB_NOT_FOUND,
+                'errors' => new \stdClass(),
+            ], 404);
+        }
+
+        $courts = Court::with('slots')
+            ->where('club_id', $club_id)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Courts retrieved successfully.',
+            'data' => PublicCourtResource::collection($courts),
         ]);
     }
 }
