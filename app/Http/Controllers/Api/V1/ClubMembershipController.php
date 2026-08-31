@@ -277,7 +277,8 @@ class ClubMembershipController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'sort' => ['nullable', 'string', 'in:name,-name,created_at,-created_at'],
             'gender' => ['nullable', 'string', 'max:50'],
-            'player_level' => ['nullable', 'string', 'max:50'],
+            'player_level' => ['nullable'],
+            'level' => ['nullable'],
             'group' => ['nullable', 'string', 'max:50'],
         ]);
 
@@ -307,12 +308,38 @@ class ClubMembershipController extends Controller
             }
         }
 
-        if ($request->filled('player_level')) {
-            $level = strtolower($request->input('player_level'));
-            $levelsToFilter = $level === 'professional' ? ['professional', 'advanced'] : [$level];
-            $query->whereHas('player', function ($q) use ($levelsToFilter) {
-                $q->whereIn(DB::raw('LOWER(playing_level)'), $levelsToFilter);
-            });
+        $rawLevel = $request->input('player_level') ?? $request->input('level');
+        if (!empty($rawLevel)) {
+            $levelsToFilter = [];
+            if (is_array($rawLevel)) {
+                $levelsToFilter = array_map('strtolower', array_map('trim', $rawLevel));
+            } elseif (is_string($rawLevel)) {
+                $decoded = json_decode($rawLevel, true);
+                if (is_array($decoded)) {
+                    $levelsToFilter = array_map('strtolower', array_map('trim', $decoded));
+                } elseif (str_contains($rawLevel, ',')) {
+                    $levelsToFilter = array_map('strtolower', array_map('trim', explode(',', $rawLevel)));
+                } else {
+                    $trimmed = strtolower(trim($rawLevel));
+                    if ($trimmed !== '') {
+                        $levelsToFilter = [$trimmed];
+                    }
+                }
+            }
+
+            if (in_array('professional', $levelsToFilter, true) && !in_array('advanced', $levelsToFilter, true)) {
+                $levelsToFilter[] = 'advanced';
+            }
+
+            if (!empty($levelsToFilter)) {
+                $query->whereHas('player', function ($q) use ($levelsToFilter) {
+                    $q->where(function ($subQ) use ($levelsToFilter) {
+                        foreach ($levelsToFilter as $lvl) {
+                            $subQ->orWhereRaw('LOWER(playing_level) LIKE ?', ["%{$lvl}%"]);
+                        }
+                    });
+                });
+            }
         }
 
         if ($request->filled('group')) {

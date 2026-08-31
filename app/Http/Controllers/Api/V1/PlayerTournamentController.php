@@ -25,12 +25,14 @@ class PlayerTournamentController extends Controller
     public function index(IndexTournamentsRequest $request): JsonResponse
     {
         $filter = $request->string('filter')->toString() ?: $request->string('status')->toString();
+        $requestedLevel = $request->input('player_level') ?? $request->input('level');
 
         $payload = $this->playerTournamentService->tournaments(
             $request->user(),
             $filter ?: null,
             (int) $request->integer('page', 1),
-            (int) $request->integer('limit', 10)
+            (int) $request->integer('limit', 10),
+            $requestedLevel
         );
 
         return response()->json([

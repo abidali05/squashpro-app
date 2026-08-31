@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 class PlayerTournamentService
 {
-    public function tournaments(User $player, ?string $filter = null, int $page = 1, int $limit = 40): array
+    public function tournaments(User $player, ?string $filter = null, int $page = 1, int $limit = 40, mixed $requestedLevel = null): array
     {
         $allTournaments = Tournament::query()
             ->with('club')
@@ -29,7 +29,10 @@ class PlayerTournamentService
             ->orderByDesc('created_at')
             ->get();
 
-        $filtered = $allTournaments->filter(function (Tournament $tournament) use ($player) {
+        $reqLevels = $this->parseLevels($requestedLevel);
+        $playerLevels = $this->parseLevels($player->playing_level);
+
+        $filtered = $allTournaments->filter(function (Tournament $tournament) use ($player, $reqLevels, $playerLevels) {
             $creatorRole = $tournament->club?->role;
 
             // CLUB_TO_CLUB tournaments are never shown to players
@@ -66,10 +69,17 @@ class PlayerTournamentService
             }
 
             // Level match
-            if ($tournament->player_level && is_array($tournament->player_level)) {
-                $playerLevel = strtoupper((string) $player->playing_level);
-                $allowedLevels = array_map('strtoupper', $tournament->player_level);
-                if (!in_array($playerLevel, $allowedLevels, true)) {
+            $tournamentLevels = $this->parseLevels($tournament->player_level);
+            if (!empty($tournamentLevels)) {
+                if (in_array('PROFESSIONAL', $tournamentLevels, true) && !in_array('ADVANCED', $tournamentLevels, true)) {
+                    $tournamentLevels[] = 'ADVANCED';
+                }
+
+                if (!empty($playerLevels) && empty(array_intersect($playerLevels, $tournamentLevels))) {
+                    return false;
+                }
+
+                if (!empty($reqLevels) && empty(array_intersect($reqLevels, $tournamentLevels))) {
                     return false;
                 }
             }
@@ -490,6 +500,31 @@ class PlayerTournamentService
             'total_records' => $paginator->total(),
             'total_pages' => $paginator->lastPage(),
         ];
+    }
+
+    private function parseLevels(mixed $input): array
+    {
+        if (empty($input)) {
+            return [];
+        }
+
+        if (is_array($input)) {
+            return array_values(array_filter(array_map('strtoupper', array_map('trim', $input))));
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', $decoded))));
+            }
+            if (str_contains($input, ',')) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', explode(',', $input)))));
+            }
+            $trimmed = strtoupper(trim($input));
+            return $trimmed !== '' ? [$trimmed] : [];
+        }
+
+        return [];
     }
 
     private function apiError(string $message, string $code, int $status = 422): never

@@ -818,10 +818,14 @@ class ClubService
             }
 
             // 2. Level check
-            if ($tournament->player_level && is_array($tournament->player_level)) {
-                $playerLevel = strtoupper((string) $player->playing_level);
-                $allowedLevels = array_map('strtoupper', $tournament->player_level);
-                if (! in_array($playerLevel, $allowedLevels, true)) {
+            $tournamentLevels = $this->parseLevels($tournament->player_level);
+            if (!empty($tournamentLevels)) {
+                $playerLevels = $this->parseLevels($player->playing_level);
+                if (in_array('PROFESSIONAL', $tournamentLevels, true) && !in_array('ADVANCED', $tournamentLevels, true)) {
+                    $tournamentLevels[] = 'ADVANCED';
+                }
+
+                if (!empty($playerLevels) && empty(array_intersect($playerLevels, $tournamentLevels))) {
                     continue;
                 }
             }
@@ -1328,7 +1332,11 @@ class ClubService
             if (in_array('professional', $allowedLevels, true) && ! in_array('advanced', $allowedLevels, true)) {
                 $allowedLevels[] = 'advanced';
             }
-            $query->whereIn(DB::raw('LOWER(playing_level)'), $allowedLevels);
+            $query->where(function ($q) use ($allowedLevels) {
+                foreach ($allowedLevels as $lvl) {
+                    $q->orWhereRaw('LOWER(playing_level) LIKE ?', ["%{$lvl}%"]);
+                }
+            });
         }
 
         // 3. Age check
@@ -2420,6 +2428,31 @@ class ClubService
             'groups' => $groups,
             'fixtures' => $fixtures,
         ];
+    }
+
+    private function parseLevels(mixed $input): array
+    {
+        if (empty($input)) {
+            return [];
+        }
+
+        if (is_array($input)) {
+            return array_values(array_filter(array_map('strtoupper', array_map('trim', $input))));
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', $decoded))));
+            }
+            if (str_contains($input, ',')) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', explode(',', $input)))));
+            }
+            $trimmed = strtoupper(trim($input));
+            return $trimmed !== '' ? [$trimmed] : [];
+        }
+
+        return [];
     }
 
     private function apiError(string $message, string $code, int $status = 422): never
