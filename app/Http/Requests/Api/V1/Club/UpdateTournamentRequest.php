@@ -11,19 +11,49 @@ class UpdateTournamentRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('player_level')) {
+            $val = $this->player_level;
+            if (is_string($val)) {
+                $decoded = json_decode($val, true);
+                if (is_array($decoded)) {
+                    $this->merge([
+                        'player_level' => array_values(array_filter(array_map('trim', $decoded))),
+                    ]);
+                } elseif (str_contains($val, ',')) {
+                    $parts = array_values(array_filter(array_map('trim', explode(',', $val))));
+                    $this->merge([
+                        'player_level' => $parts,
+                    ]);
+                } else {
+                    $trimmed = trim($val);
+                    $this->merge([
+                        'player_level' => $trimmed !== '' ? [$trimmed] : [],
+                    ]);
+                }
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
             'tournament_image' => ['nullable'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'format' => ['sometimes', 'required', 'string', 'max:100'],
-            'start_date' => ['sometimes', 'required', 'date_format:Y-m-d'],
-            'registration_deadline' => ['sometimes', 'required', 'date_format:Y-m-d'],
-            'end_date' => ['sometimes', 'required', 'date_format:Y-m-d'],
+            'format' => ['sometimes', 'required', 'string', 'in:knockout,league'],
+            'start_date' => ['sometimes', 'required', 'date'],
+            'registration_deadline' => ['sometimes', 'required', 'date', 'before:start_date'],
+            'end_date' => ['sometimes', 'required', 'date', 'after:start_date'],
             'entry_fees' => ['sometimes', 'required', 'numeric', 'min:0'],
             'prize_pool' => ['sometimes', 'required', 'numeric', 'min:0'],
             'allowed_player' => ['sometimes', 'required', 'integer', 'min:1'],
+            'maximum_players' => ['sometimes', 'required', 'integer', 'min:1'],
             'rules' => ['sometimes', 'nullable', 'string'],
+            'gender' => ['sometimes', 'required', 'string', 'in:MALE,FEMALE,OPEN'],
+            'player_level' => ['sometimes', 'required', 'array', 'min:1'],
+            'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,PROFESSIONAL'],
+            'age_group' => ['sometimes', 'required', 'string', 'regex:/^\d+-\d+$/'],
         ];
     }
 

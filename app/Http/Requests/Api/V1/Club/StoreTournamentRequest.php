@@ -13,12 +13,25 @@ class StoreTournamentRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('player_level') && is_string($this->player_level)) {
-            $decoded = json_decode($this->player_level, true);
-            if (is_array($decoded)) {
-                $this->merge([
-                    'player_level' => $decoded,
-                ]);
+        if ($this->has('player_level')) {
+            $val = $this->player_level;
+            if (is_string($val)) {
+                $decoded = json_decode($val, true);
+                if (is_array($decoded)) {
+                    $this->merge([
+                        'player_level' => array_values(array_filter(array_map('trim', $decoded))),
+                    ]);
+                } elseif (str_contains($val, ',')) {
+                    $parts = array_values(array_filter(array_map('trim', explode(',', $val))));
+                    $this->merge([
+                        'player_level' => $parts,
+                    ]);
+                } else {
+                    $trimmed = trim($val);
+                    $this->merge([
+                        'player_level' => $trimmed !== '' ? [$trimmed] : [],
+                    ]);
+                }
             }
         }
 
@@ -35,22 +48,22 @@ class StoreTournamentRequest extends FormRequest
         $isLegacy = $this->filled('opponent_club_id') && !$this->has('host_team_player_ids');
 
         $rules = [
-            'tournament_image' => ['nullable'],
+            'tournament_image' => ['required'],
             'name' => ['required', 'string', 'max:255'],
-            'format' => ['required', 'string', 'max:100'],
+            'format' => ['required', 'string', 'in:knockout,league'],
             'start_date' => ['required', 'date'],
-            'registration_deadline' => ['required', 'date'],
-            'end_date' => ['required', 'date'],
+            'registration_deadline' => ['required', 'date', 'before:start_date'],
+            'end_date' => ['required', 'date', 'after:start_date'],
             'entry_fees' => ['required', 'numeric', 'min:0'],
             'prize_pool' => ['required', 'numeric', 'min:0'],
             'allowed_player' => ['nullable', 'integer', 'min:1'],
             'rules' => ['nullable', 'string'],
             
             // New Tournament Fields
-            'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY'],
-            'gender' => ['required', 'string', 'in:MALE,FEMALE,MIXED,OPEN'],
+            'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY,OPEN'],
+            'gender' => ['required', 'string', 'in:MALE,FEMALE,OPEN'],
             'player_level' => ['required', 'array', 'min:1'],
-            'player_level.*' => ['required', 'string'],
+            'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,PROFESSIONAL'],
             'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
             'maximum_players' => ['required', 'integer', 'min:1'],
             'scorer_ids' => ['nullable', 'array'],
@@ -128,16 +141,16 @@ class StoreTournamentRequest extends FormRequest
             if ($this->filled('start_date') && $this->filled('registration_deadline')) {
                 $start = \Illuminate\Support\Carbon::parse($this->input('start_date'));
                 $deadline = \Illuminate\Support\Carbon::parse($this->input('registration_deadline'));
-                if ($deadline->gt($start)) {
-                    $validator->errors()->add('registration_deadline', 'Registration deadline must be on or before the start date.');
+                if ($deadline->gte($start)) {
+                    $validator->errors()->add('registration_deadline', 'Registration deadline must be before the start date.');
                 }
             }
 
             if ($this->filled('end_date') && $this->filled('start_date')) {
                 $start = \Illuminate\Support\Carbon::parse($this->input('start_date'));
                 $end = \Illuminate\Support\Carbon::parse($this->input('end_date'));
-                if ($end->lt($start)) {
-                    $validator->errors()->add('end_date', 'End date must be on or after the start date.');
+                if ($end->lte($start)) {
+                    $validator->errors()->add('end_date', 'End date must be after the start date.');
                 }
             }
 

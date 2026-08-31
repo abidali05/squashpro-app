@@ -28,6 +28,7 @@ use App\Notifications\Tournament\TournamentCreatedNotification;
 use App\Notifications\Tournament\TournamentInvitationAcceptedNotification;
 use App\Notifications\Tournament\TournamentInvitationNotification;
 use App\Notifications\Tournament\TournamentInvitationRejectedNotification;
+use App\Notifications\Tournament\TournamentOpenToAllNotification;
 use App\Notifications\Tournament\TournamentTeamSubmittedNotification;
 use App\Support\ApiErrorCode;
 use App\Support\AuditLogger;
@@ -765,6 +766,20 @@ class ClubService
                         ->count();
                     $tournament->save();
                 }
+            } elseif ($tournamentType === 'OPEN' || $tournamentType === 'OPEN_TO_ALL') {
+                // Notify all active club hosts about the open to all tournament creation
+                User::query()
+                    ->where('role', 'club')
+                    ->where('status', 'active')
+                    ->where('id', '!=', $club->id)
+                    ->chunkById(100, function ($clubs) use ($tournament) {
+                        $clubs->each(
+                            fn (User $targetClub) => $targetClub->notify((new TournamentOpenToAllNotification($tournament))->afterCommit())
+                        );
+                    });
+
+                // Also notify city players
+                $this->notifyCityPlayersAboutTournamentCreated($club, $tournament);
             } else {
                 // CLUB_MEMBERS_ONLY
                 // Notify eligible club members
@@ -864,6 +879,25 @@ class ClubService
 
             if (array_key_exists('rules', $data)) {
                 $tournament->rules = $data['rules'];
+            }
+
+            if (array_key_exists('player_level', $data)) {
+                $tournament->player_level = is_array($data['player_level'])
+                    ? array_values($data['player_level'])
+                    : (is_string($data['player_level']) ? array_values(array_filter(array_map('trim', explode(',', $data['player_level'])))) : null);
+            }
+
+            if (array_key_exists('gender', $data)) {
+                $tournament->gender = $data['gender'];
+            }
+
+            if (array_key_exists('age_group', $data)) {
+                $tournament->age_group = $data['age_group'];
+            }
+
+            if (array_key_exists('maximum_players', $data)) {
+                $tournament->maximum_players = (int) $data['maximum_players'];
+                $tournament->allowed_player = (int) $data['maximum_players'];
             }
 
             if ($imageFile) {

@@ -95,7 +95,7 @@
         <label class="form-label">Format <span class="text-danger">*</span></label>
         <select name="format" class="form-select @error('format') is-invalid @enderror">
             <option value="">Select Format</option>
-            @foreach(['knockout' => 'Knockout', 'league' => 'League', 'round_robin' => 'Round Robin', 'other' => 'Other'] as $val => $label)
+            @foreach(['knockout' => 'Knockout', 'league' => 'League'] as $val => $label)
                 <option value="{{ $val }}" @selected(old('format', $tournament?->format ?? '') === $val)>{{ $label }}</option>
             @endforeach
         </select>
@@ -105,7 +105,7 @@
     <div class="col-12 col-md-6">
         <label class="form-label">Gender Restriction <span class="text-danger">*</span></label>
         <select name="gender" class="form-select @error('gender') is-invalid @enderror">
-            @foreach(['OPEN' => 'Open to All', 'MALE' => 'Male Only', 'FEMALE' => 'Female Only', 'MIXED' => 'Mixed'] as $val => $label)
+            @foreach(['OPEN' => 'Open to All', 'MALE' => 'Male Only', 'FEMALE' => 'Female Only'] as $val => $label)
                 <option value="{{ $val }}" @selected(old('gender', $tournament?->gender ?? 'OPEN') === $val)>{{ $label }}</option>
             @endforeach
         </select>
@@ -127,6 +127,13 @@
     </div>
 
     <div class="col-12 col-md-6">
+        <label class="form-label">Registration Deadline <span class="text-danger">*</span></label>
+        <input type="datetime-local" name="registration_deadline" class="form-control @error('registration_deadline') is-invalid @enderror"
+            value="{{ old('registration_deadline', $tournament?->registration_deadline?->format('Y-m-d\TH:i') ?? '') }}">
+        @error('registration_deadline')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-12 col-md-6">
         <label class="form-label">Start Date <span class="text-danger">*</span></label>
         <input type="date" name="start_date" class="form-control @error('start_date') is-invalid @enderror"
             value="{{ old('start_date', $tournament?->start_date?->format('Y-m-d') ?? '') }}">
@@ -138,13 +145,6 @@
         <input type="date" name="end_date" class="form-control @error('end_date') is-invalid @enderror"
             value="{{ old('end_date', $tournament?->end_date?->format('Y-m-d') ?? '') }}">
         @error('end_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-
-    <div class="col-12 col-md-6">
-        <label class="form-label">Registration Deadline <span class="text-danger">*</span></label>
-        <input type="datetime-local" name="registration_deadline" class="form-control @error('registration_deadline') is-invalid @enderror"
-            value="{{ old('registration_deadline', $tournament?->registration_deadline?->format('Y-m-d\TH:i') ?? '') }}">
-        @error('registration_deadline')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 
     <div class="col-12 col-md-6">
@@ -179,7 +179,7 @@
             $oldLevels = old('player_level', $tournament?->player_level ?? []);
         @endphp
         <div class="d-flex flex-wrap gap-3 mt-1">
-            @foreach(['BEGINNER' => 'Beginner', 'INTERMEDIATE' => 'Intermediate', 'ADVANCED' => 'Advanced', 'PROFESSIONAL' => 'Professional', 'OPEN' => 'Open Level'] as $level => $label)
+            @foreach(['BEGINNER' => 'Beginner', 'INTERMEDIATE' => 'Intermediate', 'PROFESSIONAL' => 'Professional'] as $level => $label)
                 <div class="form-check">
                     <input type="checkbox" name="player_level[]" value="{{ $level }}" id="level_{{ $level }}" class="form-check-input"
                         @checked(in_array($level, $oldLevels, true))>
@@ -191,8 +191,8 @@
     </div>
 
     <div class="col-12">
-        <label class="form-label">Tournament Cover Image</label>
-        <input type="file" name="tournament_image" class="form-control @error('tournament_image') is-invalid @enderror">
+        <label class="form-label">Tournament Cover Image <span class="text-danger">*</span></label>
+        <input type="file" name="tournament_image" class="form-control @error('tournament_image') is-invalid @enderror" {{ $tournament ? '' : 'required' }}>
         @error('tournament_image')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 
