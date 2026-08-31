@@ -6,6 +6,9 @@ use App\Http\Requests\Api\V1\Player\RegisterTournamentRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentDetailResource;
 use App\Http\Requests\Api\V1\Player\IndexTournamentsRequest;
 use App\Http\Resources\Api\V1\PlayerTournamentListResource;
+use App\Http\Resources\Api\V1\ClubTournamentPoolResource;
+use App\Http\Resources\Api\V1\ClubTournamentRuleResource;
+use App\Services\ClubService;
 use App\Services\PlayerTournamentService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -13,8 +16,10 @@ use Illuminate\Http\Request;
 
 class PlayerTournamentController extends Controller
 {
-    public function __construct(private readonly PlayerTournamentService $playerTournamentService)
-    {
+    public function __construct(
+        private readonly PlayerTournamentService $playerTournamentService,
+        private readonly ClubService $clubService
+    ) {
     }
 
     public function index(IndexTournamentsRequest $request): JsonResponse
@@ -115,5 +120,38 @@ class PlayerTournamentController extends Controller
                 'tournament_id' => $registration->tournament_id,
             ],
         ]);
+    }
+
+    public function rules(Request $request, string $tournament_id): JsonResponse
+    {
+        $rules = $this->clubService->getTournamentRules($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament rules retrieved successfully',
+            'data' => $rules ? new ClubTournamentRuleResource($rules) : null,
+        ]);
+    }
+
+    public function pools(Request $request, string $tournament_id): JsonResponse
+    {
+        $pools = $this->clubService->getTournamentPools($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament pools retrieved successfully.',
+            'data' => $pools ? new ClubTournamentPoolResource($pools) : null,
+        ]);
+    }
+
+    public function fixtures(Request $request, string $tournament_id): JsonResponse
+    {
+        $data = $this->clubService->getFixtures($request->user(), $tournament_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tournament fixtures retrieved successfully.',
+            'data' => $data,
+        ], 200);
     }
 }

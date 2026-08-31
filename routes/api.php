@@ -76,6 +76,9 @@ Route::prefix('v1')->group(function () {
             Route::post('tournament/register', [PlayerTournamentController::class, 'register']);
             Route::patch('tournaments/{tournament_id}/participation', [PlayerTournamentController::class, 'respondToParticipation']);
             Route::post('tournament/{tournament_id}/payment', [PlayerTournamentController::class, 'completePayment']);
+            Route::get('tournaments/{tournament_id}/rules', [PlayerTournamentController::class, 'rules']);
+            Route::get('tournaments/{tournament_id}/pools', [PlayerTournamentController::class, 'pools']);
+            Route::get('tournaments/{tournament_id}/fixtures', [PlayerTournamentController::class, 'fixtures']);
 
             // Official Scorer/Umpire routes
             Route::get('official-tournaments', [PlayerOfficialTournamentController::class, 'index']);
