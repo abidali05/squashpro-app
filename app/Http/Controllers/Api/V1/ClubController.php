@@ -468,6 +468,8 @@ class ClubController extends Controller
             'groups.*.group_name' => ['required_if:format,league', 'string', 'max:100'],
             'groups.*.club_ids' => ['nullable', 'array'],
             'groups.*.club_ids.*' => ['nullable', 'integer'],
+            'groups.*.player_ids' => ['nullable', 'array'],
+            'groups.*.player_ids.*' => ['nullable', 'integer'],
             'groups.*.fixtures' => ['nullable', 'array'],
             'groups.*.fixtures.*.round' => ['required', 'string', 'max:100'],
             'groups.*.fixtures.*.home_club_id' => ['nullable', 'integer'],

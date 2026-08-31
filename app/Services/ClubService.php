@@ -1871,7 +1871,7 @@ class ClubService
             }
 
             $leagueGroups = array_filter($groupsPayload, function ($g) {
-                return ! empty($g['club_ids']) || ($g['group_name'] ?? '') !== 'Knockout Stage';
+                return ! empty($g['club_ids']) || ! empty($g['player_ids']) || ($g['group_name'] ?? '') !== 'Knockout Stage';
             });
 
             if (count($leagueGroups) !== (int) $groupCount && count($groupsPayload) !== (int) $groupCount) {
@@ -1885,32 +1885,65 @@ class ClubService
                 }
             }
 
-            $allocatedClubIds = [];
-            $groupSizes = [];
-            foreach ($groupsPayload as $groupPay) {
-                $grpClubIds = array_map('intval', (array) ($groupPay['club_ids'] ?? []));
-                if (empty($grpClubIds) && ($groupPay['group_name'] ?? '') === 'Knockout Stage') {
-                    continue;
+            $isClubMembersOnly = ($tournament->tournament_type === 'CLUB_MEMBERS_ONLY');
+
+            if ($isClubMembersOnly) {
+                $enrolledPlayerIds = TournamentRegistration::where('tournament_id', $tournament->id)
+                    ->whereIn('registration_status', ['registered', 'accepted'])
+                    ->pluck('player_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->toArray();
+
+                if (empty($enrolledPlayerIds)) {
+                    $enrolledPlayerIds = TournamentRegistration::where('tournament_id', $tournament->id)
+                        ->pluck('player_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->toArray();
                 }
-                $groupSizes[] = count($grpClubIds);
 
-                foreach ($grpClubIds as $cId) {
-                    if (! in_array($cId, $participatingClubIds, true)) {
-                        $this->apiError("Club ID {$cId} is not a participating club in this tournament.", 'VALIDATION_ERROR', 422);
+                $allocatedPlayerIds = [];
+                foreach ($groupsPayload as $groupPay) {
+                    $grpPlayerIds = array_map('intval', (array) ($groupPay['player_ids'] ?? $groupPay['club_ids'] ?? []));
+                    if (empty($grpPlayerIds) && ($groupPay['group_name'] ?? '') === 'Knockout Stage') {
+                        continue;
                     }
-                    if (in_array($cId, $allocatedClubIds, true)) {
-                        $this->apiError("Club ID {$cId} belongs to multiple groups.", 'VALIDATION_ERROR', 422);
+
+                    foreach ($grpPlayerIds as $pId) {
+                        if (! empty($enrolledPlayerIds) && ! in_array($pId, $enrolledPlayerIds, true)) {
+                            $this->apiError("Player ID {$pId} is not an enrolled player in this tournament.", 'VALIDATION_ERROR', 422);
+                        }
+                        if (in_array($pId, $allocatedPlayerIds, true)) {
+                            $this->apiError("Player ID {$pId} belongs to multiple groups.", 'VALIDATION_ERROR', 422);
+                        }
+                        $allocatedPlayerIds[] = $pId;
                     }
-                    $allocatedClubIds[] = $cId;
                 }
-            }
 
-            if (count($allocatedClubIds) !== count($participatingClubIds)) {
-                $this->apiError('Every participating club must belong to exactly one group.', 'VALIDATION_ERROR', 422);
-            }
+                if (! empty($enrolledPlayerIds) && count($allocatedPlayerIds) !== count($enrolledPlayerIds)) {
+                    $this->apiError('Every enrolled player must belong to exactly one group.', 'VALIDATION_ERROR', 422);
+                }
+            } else {
+                $allocatedClubIds = [];
+                foreach ($groupsPayload as $groupPay) {
+                    $grpClubIds = array_map('intval', (array) ($groupPay['club_ids'] ?? []));
+                    if (empty($grpClubIds) && ($groupPay['group_name'] ?? '') === 'Knockout Stage') {
+                        continue;
+                    }
 
-            if (count(array_unique($groupSizes)) > 1) {
-                $this->apiError('League group sizes must be equal.', 'VALIDATION_ERROR', 422);
+                    foreach ($grpClubIds as $cId) {
+                        if (! in_array($cId, $participatingClubIds, true)) {
+                            $this->apiError("Club ID {$cId} is not a participating club in this tournament.", 'VALIDATION_ERROR', 422);
+                        }
+                        if (in_array($cId, $allocatedClubIds, true)) {
+                            $this->apiError("Club ID {$cId} belongs to multiple groups.", 'VALIDATION_ERROR', 422);
+                        }
+                        $allocatedClubIds[] = $cId;
+                    }
+                }
+
+                if (count($allocatedClubIds) !== count($participatingClubIds)) {
+                    $this->apiError('Every participating club must belong to exactly one group.', 'VALIDATION_ERROR', 422);
+                }
             }
         } else {
             if (isset($data['group_count']) && $data['group_count'] !== null) {
@@ -2042,7 +2075,8 @@ class ClubService
                         'name' => $groupPay['group_name'],
                     ]);
 
-                    $group->clubs()->sync($groupPay['club_ids'] ?? []);
+                    $grpMembers = ! empty($groupPay['player_ids']) ? $groupPay['player_ids'] : ($groupPay['club_ids'] ?? []);
+                    $group->clubs()->sync($grpMembers);
 
                     $fixturesPay = $groupPay['fixtures'] ?? [];
                     foreach ($fixturesPay as $fixPay) {
