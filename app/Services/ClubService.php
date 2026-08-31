@@ -2216,7 +2216,7 @@ class ClubService
         });
     }
 
-    public function getFixtures(User $club, string $tournamentId): array
+    public function getFixtures(User $club, string $tournamentId, ?int $playerIdFilter = null): array
     {
         $tournament = Tournament::find($tournamentId);
         if (! $tournament) {
@@ -2229,9 +2229,81 @@ class ClubService
 
         $tournamentType = $tournament->tournament_type ?? ($tournament->opponent_club_id ? 'CLUB_TO_CLUB' : 'CLUB_MEMBERS_ONLY');
 
-        $formatFixture = function (TournamentFixture $f) use ($tournamentType) {
+        // Build list of participating players for the filter dropdown
+        $playerIds = collect();
+
+        $registeredPlayerIds = TournamentRegistration::where('tournament_id', $tournament->id)
+            ->where('registration_status', 'registered')
+            ->pluck('player_id');
+        $playerIds = $playerIds->merge($registeredPlayerIds);
+
+        $matchPlayerIds = DB::table('tournament_matches')
+            ->join('tournament_fixtures', 'tournament_matches.fixture_id', '=', 'tournament_fixtures.id')
+            ->where('tournament_fixtures.tournament_id', $tournament->id)
+            ->select('tournament_matches.home_player_id', 'tournament_matches.away_player_id')
+            ->get();
+        foreach ($matchPlayerIds as $row) {
+            if ($row->home_player_id) $playerIds->push($row->home_player_id);
+            if ($row->away_player_id) $playerIds->push($row->away_player_id);
+        }
+
+        $groupPlayerIds = DB::table('tournament_group_clubs')
+            ->join('tournament_groups', 'tournament_group_clubs.group_id', '=', 'tournament_groups.id')
+            ->where('tournament_groups.tournament_id', $tournament->id)
+            ->pluck('tournament_group_clubs.club_id');
+        $playerIds = $playerIds->merge($groupPlayerIds);
+
+        if ($tournamentType === 'CLUB_MEMBERS_ONLY') {
+            $fixturePlayerIds = TournamentFixture::where('tournament_id', $tournament->id)
+                ->select('home_club_id', 'away_club_id', 'bye_club_id')
+                ->get();
+            foreach ($fixturePlayerIds as $fxRow) {
+                if ($fxRow->home_club_id) $playerIds->push($fxRow->home_club_id);
+                if ($fxRow->away_club_id) $playerIds->push($fxRow->away_club_id);
+                if ($fxRow->bye_club_id) $playerIds->push($fxRow->bye_club_id);
+            }
+        }
+
+        $uniquePlayerIds = $playerIds->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
+        $playersList = [];
+        if ($uniquePlayerIds->isNotEmpty()) {
+            $playerUsers = User::whereIn('id', $uniquePlayerIds)->get();
+            foreach ($playerUsers as $pu) {
+                $membership = ClubMembership::where('player_id', $pu->id)
+                    ->where('status', 'approved')
+                    ->with('club')
+                    ->first();
+                $cName = $membership?->club?->club_name 
+                    ?? $membership?->club?->name 
+                    ?? $tournament->club?->club_name 
+                    ?? $tournament->club?->name 
+                    ?? null;
+
+                $img = $pu->profile_image;
+                $imgUrl = $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : null;
+
+                $playersList[] = [
+                    'id' => (int) $pu->id,
+                    'name' => $pu->name,
+                    'profile_image' => $imgUrl,
+                    'club_name' => $cName,
+                ];
+            }
+        }
+
+        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter) {
             $fMatches = [];
             foreach ($f->matches as $m) {
+                $homePId = (int) ($m->home_player_id ?? 0);
+                $awayPId = (int) ($m->away_player_id ?? 0);
+
+                if ($playerIdFilter !== null && $playerIdFilter > 0) {
+                    if ($homePId !== $playerIdFilter && $awayPId !== $playerIdFilter) {
+                        continue;
+                    }
+                }
+
                 $homePlayerMatch = null;
                 if ($m->home_player_id && $m->homePlayer) {
                     $img = $m->homePlayer->profile_image;
@@ -2380,6 +2452,17 @@ class ClubService
             $fixData['away_placeholder'] = $f->away_placeholder;
             $fixData['matches'] = $fMatches;
 
+            if ($playerIdFilter !== null && $playerIdFilter > 0) {
+                $matchesPlayer = (int) ($f->home_club_id ?? 0) === $playerIdFilter 
+                    || (int) ($f->away_club_id ?? 0) === $playerIdFilter 
+                    || (int) ($f->bye_club_id ?? 0) === $playerIdFilter 
+                    || ! empty($fMatches);
+
+                if (! $matchesPlayer) {
+                    return null;
+                }
+            }
+
             return $fixData;
         };
 
@@ -2400,7 +2483,10 @@ class ClubService
 
                 $gFixtures = [];
                 foreach ($g->fixtures as $f) {
-                    $gFixtures[] = $formatFixture($f);
+                    $formatted = $formatFixture($f);
+                    if ($formatted !== null) {
+                        $gFixtures[] = $formatted;
+                    }
                 }
 
                 $groups[] = [
@@ -2416,7 +2502,10 @@ class ClubService
                 ->get();
 
             foreach ($savedFixtures as $f) {
-                $fixtures[] = $formatFixture($f);
+                $formatted = $formatFixture($f);
+                if ($formatted !== null) {
+                    $fixtures[] = $formatted;
+                }
             }
         }
 
@@ -2425,6 +2514,7 @@ class ClubService
             'tournament_type' => $tournamentType,
             'format' => $format,
             'group_count' => $format === 'league' ? count($groups) : null,
+            'players' => $playersList,
             'groups' => $groups,
             'fixtures' => $fixtures,
         ];

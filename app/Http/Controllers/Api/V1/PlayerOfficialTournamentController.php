@@ -200,7 +200,8 @@ class PlayerOfficialTournamentController extends Controller
             ], 403);
         }
 
-        $fixturesData = $this->clubService->getFixtures($request->user(), $tournamentId);
+        $playerId = $request->filled('player_id') ? (int) $request->input('player_id') : null;
+        $fixturesData = $this->clubService->getFixtures($request->user(), $tournamentId, $playerId);
 
         return response()->json([
             'success' => true,

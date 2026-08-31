@@ -534,7 +534,8 @@ class ClubController extends Controller
 
     public function getFixtures(Request $request, string $tournament_id): JsonResponse
     {
-        $data = $this->clubService->getFixtures($request->user(), $tournament_id);
+        $playerId = $request->filled('player_id') ? (int) $request->input('player_id') : null;
+        $data = $this->clubService->getFixtures($request->user(), $tournament_id, $playerId);
 
         return response()->json([
             'success' => true,
