@@ -88,16 +88,23 @@
                 @php
                     $fixtureCourt = $f->court;
                     $matchCourtIds = $f->matches->pluck('court.name')->filter()->unique();
+                    $matchVenueIds = $f->matches->pluck('venue_id')->filter()->unique();
                 @endphp
                 @if($fixtureCourt)
-                    <span class="badge bg-label-success">
+                    <span class="badge bg-label-success me-1 mb-1">
                         <i class="mdi mdi-map-marker-outline me-1"></i>{{ $fixtureCourt->name }}
                     </span>
                 @elseif($matchCourtIds->isNotEmpty())
-                    <span class="badge bg-label-info">
+                    <span class="badge bg-label-success me-1 mb-1">
                         <i class="mdi mdi-map-marker-outline me-1"></i>{{ $matchCourtIds->implode(', ') }}
                     </span>
-                @else
+                @endif
+
+                @if($matchVenueIds->isNotEmpty())
+                    <span class="badge bg-label-info mb-1">
+                        <i class="mdi mdi-domain me-1"></i>Venue #{{ $matchVenueIds->implode(', #') }}
+                    </span>
+                @elseif(!$fixtureCourt && $matchCourtIds->isEmpty())
                     <span class="text-muted small">Unassigned</span>
                 @endif
             </td>

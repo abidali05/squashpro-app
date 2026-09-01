@@ -91,6 +91,7 @@ class FixtureManagementController extends Controller
             'matches.awayPlayer',
             'matches.winnerPlayer',
             'matches.court',
+            'matches.venue',
             'matches.scorers',
             'matches.umpires',
         ]);
@@ -119,6 +120,7 @@ class FixtureManagementController extends Controller
                 'matches.awayPlayer',
                 'matches.winnerPlayer',
                 'matches.court',
+                'matches.venue',
                 'matches.scorers',
                 'matches.umpires',
             ])

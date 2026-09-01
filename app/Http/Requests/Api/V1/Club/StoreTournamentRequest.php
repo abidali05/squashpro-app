@@ -61,7 +61,7 @@ class StoreTournamentRequest extends FormRequest
             
             // New Tournament Fields
             'tournament_type' => ['required', 'string', 'in:CLUB_TO_CLUB,CLUB_MEMBERS_ONLY,OPEN'],
-            'gender' => ['required', 'string', 'in:MALE,FEMALE,OPEN'],
+            'gender' => ['required', 'string', 'in:MALE,FEMALE,ALL'],
             'player_level' => ['required', 'array', 'min:1'],
             'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,PROFESSIONAL'],
             'age_group' => ['required', 'string', 'regex:/^\d+-\d+$/'],
