@@ -676,7 +676,7 @@ class ClubService
                 // New fields
                 'tournament_type' => $tournamentType,
                 'opponent_club_id' => $opponentClubIdValue,
-                'gender' => $data['gender'] ?? 'OPEN',
+                'gender' => $data['gender'],
                 'player_level' => $data['player_level'] ?? null,
                 'age_group' => $data['age_group'] ?? null,
             ]);
@@ -811,7 +811,8 @@ class ClubService
             }
 
             // 1. Gender check
-            if ($tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            $genderUpper = strtoupper((string) $tournament->gender);
+            if (! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
                 if (strcasecmp((string) $player->gender, (string) $tournament->gender) !== 0) {
                     continue;
                 }
@@ -819,13 +820,13 @@ class ClubService
 
             // 2. Level check
             $tournamentLevels = $this->parseLevels($tournament->player_level);
-            if (!empty($tournamentLevels)) {
+            if (! empty($tournamentLevels)) {
                 $playerLevels = $this->parseLevels($player->playing_level);
-                if (in_array('PROFESSIONAL', $tournamentLevels, true) && !in_array('ADVANCED', $tournamentLevels, true)) {
+                if (in_array('PROFESSIONAL', $tournamentLevels, true) && ! in_array('ADVANCED', $tournamentLevels, true)) {
                     $tournamentLevels[] = 'ADVANCED';
                 }
 
-                if (!empty($playerLevels) && empty(array_intersect($playerLevels, $tournamentLevels))) {
+                if (! empty($playerLevels) && empty(array_intersect($playerLevels, $tournamentLevels))) {
                     continue;
                 }
             }
@@ -1248,8 +1249,9 @@ class ClubService
         }
 
         // 2. Gender check
-        if ($tournament->gender && $tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
-            if (strtolower($player->gender) !== strtolower($tournament->gender)) {
+        $genderUpper = strtoupper((string) $tournament->gender);
+        if ($tournament->gender && ! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
+            if (strtolower((string) $player->gender) !== strtolower((string) $tournament->gender)) {
                 return false;
             }
         }
@@ -1322,8 +1324,9 @@ class ClubService
             });
 
         // 1. Gender check
-        if ($tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
-            $query->whereRaw('LOWER(gender) = ?', [strtolower($tournament->gender)]);
+        $genderUpper = strtoupper((string) $tournament->gender);
+        if (! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
+            $query->whereRaw('LOWER(gender) = ?', [strtolower((string) $tournament->gender)]);
         }
 
         // 2. Level check
@@ -2243,8 +2246,12 @@ class ClubService
             ->select('tournament_matches.home_player_id', 'tournament_matches.away_player_id')
             ->get();
         foreach ($matchPlayerIds as $row) {
-            if ($row->home_player_id) $playerIds->push($row->home_player_id);
-            if ($row->away_player_id) $playerIds->push($row->away_player_id);
+            if ($row->home_player_id) {
+                $playerIds->push($row->home_player_id);
+            }
+            if ($row->away_player_id) {
+                $playerIds->push($row->away_player_id);
+            }
         }
 
         $groupPlayerIds = DB::table('tournament_group_clubs')
@@ -2258,9 +2265,15 @@ class ClubService
                 ->select('home_club_id', 'away_club_id', 'bye_club_id')
                 ->get();
             foreach ($fixturePlayerIds as $fxRow) {
-                if ($fxRow->home_club_id) $playerIds->push($fxRow->home_club_id);
-                if ($fxRow->away_club_id) $playerIds->push($fxRow->away_club_id);
-                if ($fxRow->bye_club_id) $playerIds->push($fxRow->bye_club_id);
+                if ($fxRow->home_club_id) {
+                    $playerIds->push($fxRow->home_club_id);
+                }
+                if ($fxRow->away_club_id) {
+                    $playerIds->push($fxRow->away_club_id);
+                }
+                if ($fxRow->bye_club_id) {
+                    $playerIds->push($fxRow->bye_club_id);
+                }
             }
         }
 
@@ -2274,10 +2287,10 @@ class ClubService
                     ->where('status', 'approved')
                     ->with('club')
                     ->first();
-                $cName = $membership?->club?->club_name 
-                    ?? $membership?->club?->name 
-                    ?? $tournament->club?->club_name 
-                    ?? $tournament->club?->name 
+                $cName = $membership?->club?->club_name
+                    ?? $membership?->club?->name
+                    ?? $tournament->club?->club_name
+                    ?? $tournament->club?->name
                     ?? null;
 
                 $img = $pu->profile_image;
@@ -2345,6 +2358,7 @@ class ClubService
 
                 $scorersList = $m->scorers->map(function ($s) {
                     $uName = $s->name ?? User::find($s->id)?->name;
+
                     return [
                         'id' => (int) $s->id,
                         'full_name' => $uName,
@@ -2353,6 +2367,7 @@ class ClubService
 
                 $umpiresList = $m->umpires->map(function ($u) {
                     $uName = $u->name ?? User::find($u->id)?->name;
+
                     return [
                         'id' => (int) $u->id,
                         'full_name' => $uName,
@@ -2453,9 +2468,9 @@ class ClubService
             $fixData['matches'] = $fMatches;
 
             if ($playerIdFilter !== null && $playerIdFilter > 0) {
-                $matchesPlayer = (int) ($f->home_club_id ?? 0) === $playerIdFilter 
-                    || (int) ($f->away_club_id ?? 0) === $playerIdFilter 
-                    || (int) ($f->bye_club_id ?? 0) === $playerIdFilter 
+                $matchesPlayer = (int) ($f->home_club_id ?? 0) === $playerIdFilter
+                    || (int) ($f->away_club_id ?? 0) === $playerIdFilter
+                    || (int) ($f->bye_club_id ?? 0) === $playerIdFilter
                     || ! empty($fMatches);
 
                 if (! $matchesPlayer) {
@@ -2539,6 +2554,7 @@ class ClubService
                 return array_values(array_filter(array_map('strtoupper', array_map('trim', explode(',', $input)))));
             }
             $trimmed = strtoupper(trim($input));
+
             return $trimmed !== '' ? [$trimmed] : [];
         }
 

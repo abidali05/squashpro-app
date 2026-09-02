@@ -50,7 +50,7 @@ class UpdateTournamentRequest extends FormRequest
             'allowed_player' => ['sometimes', 'required', 'integer', 'min:1'],
             'maximum_players' => ['sometimes', 'required', 'integer', 'min:1'],
             'rules' => ['sometimes', 'nullable', 'string'],
-            'gender' => ['sometimes', 'required', 'string', 'in:MALE,FEMALE,OPEN'],
+            'gender' => ['sometimes', 'required', 'string', 'in:MALE,FEMALE,ALL'],
             'player_level' => ['sometimes', 'required', 'array', 'min:1'],
             'player_level.*' => ['required', 'string', 'in:BEGINNER,INTERMEDIATE,PROFESSIONAL'],
             'age_group' => ['sometimes', 'required', 'string', 'regex:/^\d+-\d+$/'],

@@ -126,7 +126,8 @@ class PlayerDashboardController extends Controller
             // 2. Criteria Matching (gender, player_level, age_group):
             
             // Gender match
-            if ($tournament->gender && $tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            $genderUpper = strtoupper((string) $tournament->gender);
+            if ($tournament->gender && ! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
                 if (strcasecmp((string) $user->gender, (string) $tournament->gender) !== 0) {
                     return false;
                 }

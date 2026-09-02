@@ -62,7 +62,8 @@ class PlayerTournamentService
             // 2. Criteria Matching (gender, player_level, age_group):
 
             // Gender match
-            if ($tournament->gender && $tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            $genderUpper = strtoupper((string) $tournament->gender);
+            if ($tournament->gender && ! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
                 if (strcasecmp((string) $player->gender, (string) $tournament->gender) !== 0) {
                     return false;
                 }
@@ -269,7 +270,8 @@ class PlayerTournamentService
 
             // Revalidate player eligibility
             // 1. Gender check
-            if ($tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            $genderUpper = strtoupper((string) $tournament->gender);
+            if (! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
                 if (strcasecmp((string) $player->gender, (string) $tournament->gender) !== 0) {
                     $this->apiError('Player gender does not match tournament criteria.', 'PLAYER_NOT_ELIGIBLE', 422);
                 }
