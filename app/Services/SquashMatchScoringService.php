@@ -93,7 +93,7 @@ class SquashMatchScoringService
     public function recordRally(
         TournamentMatch $match,
         string $callType,
-        int $awardedToPlayerId,
+        ?int $awardedToPlayerId = null,
         ?int $strikerPlayerId = null,
         ?string $handoutChosenSide = null
     ): array {
@@ -141,7 +141,12 @@ class SquashMatchScoringService
                 $nextServerId = $currentServerId;
                 $nextServingSide = $currentServingSide;
                 $canChangeServingSide = false;
+                $awardedToPlayerId = null; // Nullable for LET
             } else {
+                if (!$awardedToPlayerId) {
+                    throw new Exception("awarded_to_player_id is required for {$callType} call.");
+                }
+
                 // Award point
                 if ($awardedToPlayerId == $match->home_player_id) {
                     $currentGame->home_score += 1;
@@ -176,7 +181,7 @@ class SquashMatchScoringService
                 'server_player_id' => $currentServerId,
                 'serving_side' => $currentServingSide,
                 'call_type' => $callType,
-                'striker_player_id' => $strikerPlayerId ?? $awardedToPlayerId,
+                'striker_player_id' => $strikerPlayerId ?? $awardedToPlayerId ?? $currentServerId,
                 'awarded_to_player_id' => $awardedToPlayerId,
                 'home_score_after' => $currentGame->home_score,
                 'away_score_after' => $currentGame->away_score,
@@ -204,7 +209,12 @@ class SquashMatchScoringService
                 $isGameOver = true;
                 $gameWinnerId = ($homeScore > $awayScore) ? $match->home_player_id : $match->away_player_id;
 
-                $duration = $currentGame->start_time ? $now->diffInSeconds($currentGame->start_time) : 0;
+                // Ensure non-negative integer for duration_seconds
+                $startTime = $currentGame->start_time ? Carbon::parse($currentGame->start_time) : null;
+                $duration = 0;
+                if ($startTime) {
+                    $duration = (int) max(0, (int) round(abs($now->diffInSeconds($startTime))));
+                }
 
                 $currentGame->update([
                     'status' => 'completed',
@@ -261,7 +271,8 @@ class SquashMatchScoringService
             // Build latest_event payload
             $serverUser = User::find($currentServerId);
             $nextServerUser = User::find($nextServerId);
-            $awardedUser = User::find($awardedToPlayerId);
+            $awardedUser = $awardedToPlayerId ? User::find($awardedToPlayerId) : null;
+            $awardedName = $awardedUser?->name ?? ($awardedToPlayerId ? ($awardedToPlayerId == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder) : null);
 
             $payload['latest_event'] = [
                 'sequence' => $rally->sequence,
@@ -275,7 +286,7 @@ class SquashMatchScoringService
                 'next_server_name' => $nextServerUser?->name ?? ($nextServerId == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder),
                 'next_serving_side' => $nextServingSide,
                 'awarded_to_player_id' => $awardedToPlayerId,
-                'awarded_to_player_name' => $awardedUser?->name ?? ($awardedToPlayerId == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder),
+                'awarded_to_player_name' => $awardedName,
                 'timestamp' => $rally->event_time?->toIso8601String() ?? $now->toIso8601String(),
             ];
 
@@ -483,7 +494,7 @@ class SquashMatchScoringService
                 'game_number' => (int) $g->game_number,
                 'start_time' => $g->start_time?->toIso8601String(),
                 'end_time' => $g->end_time?->toIso8601String(),
-                'duration_seconds' => $g->duration_seconds,
+                'duration_seconds' => $g->duration_seconds ? (int) $g->duration_seconds : 0,
                 'score' => "{$g->home_score}-{$g->away_score}",
                 'winner_player_id' => $g->winner_player_id,
                 'winner_name' => $winnerName,
@@ -502,6 +513,7 @@ class SquashMatchScoringService
         $history = $rallies->map(function ($r) use ($match) {
             $serverName = $r->server?->name ?? ($r->server_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
             $nextServerName = $r->nextServer?->name ?? ($r->next_server_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
+            $awardedName = $r->awardedTo?->name ?? ($r->awarded_to_player_id ? ($r->awarded_to_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder) : null);
 
             return [
                 'sequence' => (int) $r->sequence,
@@ -511,6 +523,7 @@ class SquashMatchScoringService
                 'serving_side' => $r->serving_side,
                 'call_type' => $r->call_type,
                 'awarded_to_player_id' => $r->awarded_to_player_id,
+                'awarded_to_player_name' => $awardedName,
                 'score_after' => "{$r->home_score_after}-{$r->away_score_after}",
                 'next_server_id' => $r->next_server_player_id,
                 'next_server_name' => $nextServerName,

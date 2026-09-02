@@ -85,7 +85,10 @@ class PlayerMatchScoringController extends Controller
 
         $validator = Validator::make($request->all(), [
             'call_type' => ['required', 'string', 'in:ace,clean_winner,tin,stroke,no_let,let'],
-            'awarded_to_player_id' => ['required', 'integer'],
+            'awarded_to_player_id' => [
+                $request->input('call_type') === 'let' ? 'nullable' : 'required',
+                'integer'
+            ],
             'striker_player_id' => ['nullable', 'integer'],
             'handout_chosen_side' => ['nullable', 'string', 'in:L,R,l,r'],
         ]);
@@ -103,7 +106,7 @@ class PlayerMatchScoringController extends Controller
             $data = $this->scoringService->recordRally(
                 $match,
                 (string) $request->input('call_type'),
-                (int) $request->input('awarded_to_player_id'),
+                $request->filled('awarded_to_player_id') ? (int) $request->input('awarded_to_player_id') : null,
                 $request->filled('striker_player_id') ? (int) $request->input('striker_player_id') : null,
                 $request->input('handout_chosen_side')
             );
