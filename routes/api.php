@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
 use App\Http\Controllers\Api\V1\PlayerOfficialTournamentController;
+use App\Http\Controllers\Api\V1\PlayerMatchScoringController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use App\Http\Controllers\Api\V1\PublicClubController;
 use App\Http\Controllers\Api\V1\PublicPlayerController;
@@ -84,6 +85,13 @@ Route::prefix('v1')->group(function () {
             Route::get('official-tournaments', [PlayerOfficialTournamentController::class, 'index']);
             Route::get('official-tournaments/{tournament_id}', [PlayerOfficialTournamentController::class, 'show']);
             Route::get('official-tournaments/{tournament_id}/fixtures', [PlayerOfficialTournamentController::class, 'fixtures']);
+
+            // Live Squash Match Scoring Routes
+            Route::post('matches/{match_id}/start', [PlayerMatchScoringController::class, 'start']);
+            Route::post('matches/{match_id}/rally', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/undo', [PlayerMatchScoringController::class, 'undo']);
+            Route::get('matches/{match_id}/live', [PlayerMatchScoringController::class, 'live']);
+            Route::post('matches/{match_id}/complete', [PlayerMatchScoringController::class, 'complete']);
         });
 
         // Club Routes
