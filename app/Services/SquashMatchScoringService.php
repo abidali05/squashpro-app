@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ClubTournamentRule;
 use App\Models\TournamentMatch;
 use App\Models\TournamentMatchGame;
 use App\Models\TournamentMatchRally;
@@ -13,15 +14,49 @@ use Exception;
 class SquashMatchScoringService
 {
     /**
+     * Helper to resolve scoring rules (best_of, points_per_game, win_by) from tournament rules or match defaults.
+     */
+    public function getScoringRules(TournamentMatch $match): array
+    {
+        $bestOf = $match->best_of ?? 3;
+        $pointsPerGame = 11;
+        $winBy = 2;
+
+        $tournamentId = $match->fixture?->tournament_id;
+        if ($tournamentId) {
+            $rule = ClubTournamentRule::where('tournament_id', $tournamentId)->first();
+            if ($rule && !empty($rule->scoring_rules)) {
+                if (!empty($rule->scoring_rules['best_of'])) {
+                    $bestOf = (int) $rule->scoring_rules['best_of'];
+                }
+                if (!empty($rule->scoring_rules['points_per_game'])) {
+                    $pointsPerGame = (int) $rule->scoring_rules['points_per_game'];
+                }
+                if (!empty($rule->scoring_rules['win_by'])) {
+                    $winBy = (int) $rule->scoring_rules['win_by'];
+                }
+            }
+        }
+
+        return [
+            'best_of' => $bestOf,
+            'points_per_game' => $pointsPerGame,
+            'win_by' => $winBy,
+        ];
+    }
+
+    /**
      * Start a squash match with toss and initial server election.
      */
     public function startMatch(TournamentMatch $match, int $tossWinnerPlayerId, int $initialServerPlayerId, string $initialServingSide): array
     {
         return DB::transaction(function () use ($match, $tossWinnerPlayerId, $initialServerPlayerId, $initialServingSide) {
             $now = Carbon::now();
+            $rules = $this->getScoringRules($match);
 
             $match->update([
                 'status' => 'live',
+                'best_of' => $rules['best_of'],
                 'toss_winner_player_id' => $tossWinnerPlayerId,
                 'initial_server_player_id' => $initialServerPlayerId,
                 'initial_serving_side' => strtoupper($initialServingSide),
@@ -88,6 +123,11 @@ class SquashMatchScoringService
                 }
             }
 
+            $rules = $this->getScoringRules($match);
+            $pointsPerGame = $rules['points_per_game'];
+            $winBy = $rules['win_by'];
+            $bestOf = $rules['best_of'];
+
             $currentServerId = $match->current_server_id ?? $match->home_player_id;
             $currentServingSide = strtoupper($match->current_serving_side ?? 'R');
             $callType = strtolower($callType);
@@ -153,17 +193,17 @@ class SquashMatchScoringService
                 'can_change_serving_side' => $canChangeServingSide,
             ]);
 
-            // Check Game Winning Rule: target = 11, win by 2
+            // Check Game Winning Rule (target points, win_by lead)
             $isGameOver = false;
             $isMatchOver = false;
 
             $homeScore = $currentGame->home_score;
             $awayScore = $currentGame->away_score;
 
-            if (($homeScore >= 11 || $awayScore >= 11) && abs($homeScore - $awayScore) >= 2) {
+            if (($homeScore >= $pointsPerGame || $awayScore >= $pointsPerGame) && abs($homeScore - $awayScore) >= $winBy) {
                 $isGameOver = true;
                 $gameWinnerId = ($homeScore > $awayScore) ? $match->home_player_id : $match->away_player_id;
-                
+
                 $duration = $currentGame->start_time ? $now->diffInSeconds($currentGame->start_time) : 0;
 
                 $currentGame->update([
@@ -174,7 +214,6 @@ class SquashMatchScoringService
                 ]);
 
                 // Check Match Winning Rule
-                $bestOf = $match->best_of ?? 3;
                 $gamesNeededToWin = (int) ceil($bestOf / 2);
 
                 $completedGames = TournamentMatchGame::where('match_id', $match->id)
@@ -191,7 +230,6 @@ class SquashMatchScoringService
                     $match->update([
                         'winner_player_id' => $matchWinnerId,
                         'match_end_time' => $now,
-                        // Status stays live or transitions according to completion
                     ]);
                 } else {
                     // Match continues -> advance current_game
@@ -336,12 +374,14 @@ class SquashMatchScoringService
     }
 
     /**
-     * Finalize & complete match results.
+     * Finalize & complete match results with strict rules checks.
      */
     public function completeMatch(TournamentMatch $match, ?int $winnerPlayerId = null): array
     {
         return DB::transaction(function () use ($match, $winnerPlayerId) {
-            $now = Carbon::now();
+            $rules = $this->getScoringRules($match);
+            $bestOf = $rules['best_of'];
+            $gamesNeededToWin = (int) ceil($bestOf / 2);
 
             $completedGames = TournamentMatchGame::where('match_id', $match->id)
                 ->where('status', 'completed')
@@ -351,9 +391,24 @@ class SquashMatchScoringService
             $homeGamesWon = $completedGames->where('winner_player_id', $match->home_player_id)->count();
             $awayGamesWon = $completedGames->where('winner_player_id', $match->away_player_id)->count();
 
+            // CHECK: Match cannot be completed if neither player has won the required games (Best of 3 -> 2 games, Best of 5 -> 3 games)
+            if ($homeGamesWon < $gamesNeededToWin && $awayGamesWon < $gamesNeededToWin) {
+                throw new Exception(
+                    "Cannot complete match yet. Based on tournament rules (Best of {$bestOf}), a player must win at least {$gamesNeededToWin} games to complete the match. Current games won: {$homeGamesWon}-{$awayGamesWon}."
+                );
+            }
+
             if (!$winnerPlayerId) {
                 $winnerPlayerId = ($homeGamesWon >= $awayGamesWon) ? $match->home_player_id : $match->away_player_id;
+            } else {
+                // Verify winner is valid
+                $actualWinnerId = ($homeGamesWon >= $awayGamesWon) ? $match->home_player_id : $match->away_player_id;
+                if ($winnerPlayerId != $actualWinnerId) {
+                    throw new Exception("Invalid winner_player_id provided. Based on completed games ({$homeGamesWon}-{$awayGamesWon}), the winner must be player ID {$actualWinnerId}.");
+                }
             }
+
+            $now = Carbon::now();
 
             // Build score string e.g. "2-0 (11-7, 11-9)"
             $gameScoresStr = $completedGames->map(function ($g) {
@@ -389,6 +444,11 @@ class SquashMatchScoringService
     {
         $match->loadMissing(['homePlayer', 'awayPlayer', 'winnerPlayer', 'court', 'venue', 'fixture.tournament']);
 
+        $rules = $this->getScoringRules($match);
+        $bestOf = $rules['best_of'];
+        $pointsPerGame = $rules['points_per_game'];
+        $winBy = $rules['win_by'];
+
         $games = TournamentMatchGame::where('match_id', $match->id)
             ->orderBy('game_number', 'asc')
             ->get();
@@ -409,7 +469,6 @@ class SquashMatchScoringService
         $p1GameScores = $completedGames->map(fn($g) => (int) $g->home_score)->values()->toArray();
         $p2GameScores = $completedGames->map(fn($g) => (int) $g->away_score)->values()->toArray();
 
-        $bestOf = $match->best_of ?? 3;
         $gamesNeededToWin = (int) ceil($bestOf / 2);
 
         $isMatchOver = ($match->status === 'completed') || ($p1GamesWon >= $gamesNeededToWin || $p2GamesWon >= $gamesNeededToWin);
@@ -473,9 +532,9 @@ class SquashMatchScoringService
             'court_name' => $courtName,
             'round_name' => $match->fixture?->round ?? 'Match Round',
             'status' => $match->status,
-            'best_of' => (int) ($match->best_of ?? 3),
-            'points_per_game' => 11,
-            'win_by' => 2,
+            'best_of' => $bestOf,
+            'points_per_game' => $pointsPerGame,
+            'win_by' => $winBy,
             'current_game' => (int) ($match->current_game ?? 1),
             'match_start_time' => $match->match_start_time?->toIso8601String(),
             'match_end_time' => $match->match_end_time?->toIso8601String(),

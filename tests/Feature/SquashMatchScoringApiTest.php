@@ -140,15 +140,33 @@ class SquashMatchScoringApiTest extends TestCase
             ->assertJsonPath('data.current_server_id', $this->player1->id)
             ->assertJsonPath('data.current_serving_side', 'L');
 
-        // 6. Live Match State
+        // 6. Premature Completion Attempt (Should fail because 0 games completed out of Best of 3)
+        $prematureResponse = $this->withHeaders($headers)->postJson("/api/v1/player/matches/{$this->match->id}/complete", [
+            'winner_player_id' => $this->player1->id,
+        ]);
+
+        $prematureResponse->assertStatus(400)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error_code', 'MATCH_NOT_FINISHED');
+
+        // 7. Complete 2 games for Player 1 (Usama) to satisfy Best of 3 rule
+        for ($g = 1; $g <= 2; $g++) {
+            for ($p = 0; $p < 11; $p++) {
+                $this->withHeaders($headers)->postJson("/api/v1/player/matches/{$this->match->id}/rally", [
+                    'call_type' => 'clean_winner',
+                    'awarded_to_player_id' => $this->player1->id,
+                ]);
+            }
+        }
+
+        // 8. Live Match State
         $liveResponse = $this->withHeaders($headers)->getJson("/api/v1/player/matches/{$this->match->id}/live");
 
         $liveResponse->assertStatus(200)
             ->assertJsonPath('data.match_id', $this->match->id)
-            ->assertJsonPath('data.player_one.name', 'Usama')
-            ->assertJsonPath('data.player_two.name', 'Muneeb');
+            ->assertJsonPath('data.player_one.games_won', 2);
 
-        // 7. Finalize Match
+        // 9. Finalize Match (Now succeeds)
         $completeResponse = $this->withHeaders($headers)->postJson("/api/v1/player/matches/{$this->match->id}/complete", [
             'winner_player_id' => $this->player1->id,
         ]);

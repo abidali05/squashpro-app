@@ -215,8 +215,8 @@ class PlayerMatchScoringController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => 'COMPLETE_MATCH_FAILED',
-            ], 500);
+                'error_code' => 'MATCH_NOT_FINISHED',
+            ], 400);
         }
     }
 }
