@@ -2219,7 +2219,7 @@ class ClubService
         });
     }
 
-    public function getFixtures(User $club, string $tournamentId, ?int $playerIdFilter = null): array
+    public function getFixtures(User $club, string $tournamentId, ?int $playerIdFilter = null, ?int $officialIdFilter = null): array
     {
         $tournament = Tournament::find($tournamentId);
         if (! $tournament) {
@@ -2305,7 +2305,7 @@ class ClubService
             }
         }
 
-        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter) {
+        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter, $officialIdFilter) {
             $fMatches = [];
             foreach ($f->matches as $m) {
                 $homePId = (int) ($m->home_player_id ?? 0);
@@ -2313,6 +2313,15 @@ class ClubService
 
                 if ($playerIdFilter !== null && $playerIdFilter > 0) {
                     if ($homePId !== $playerIdFilter && $awayPId !== $playerIdFilter) {
+                        continue;
+                    }
+                }
+
+                if ($officialIdFilter !== null && $officialIdFilter > 0) {
+                    $mScorerIds = $m->scorers->pluck('id')->map(fn ($id) => (int) $id)->all();
+                    $mUmpireIds = $m->umpires->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+                    if (! in_array($officialIdFilter, $mScorerIds, true) && ! in_array($officialIdFilter, $mUmpireIds, true)) {
                         continue;
                     }
                 }
@@ -2474,6 +2483,12 @@ class ClubService
                     || ! empty($fMatches);
 
                 if (! $matchesPlayer) {
+                    return null;
+                }
+            }
+
+            if ($officialIdFilter !== null && $officialIdFilter > 0) {
+                if (empty($fMatches)) {
                     return null;
                 }
             }
