@@ -510,7 +510,7 @@ class SquashMatchScoringService
     /**
      * Construct live match state payload exact to backend specification.
      */
-    public function getLiveMatchStatePayload(TournamentMatch $match, ?int $perPage = null, int $page = 1): array
+    public function getLiveMatchStatePayload(TournamentMatch $match, ?int $perPage = null, int $page = 1, ?int $gameNumber = null): array
     {
         $match->loadMissing(['homePlayer', 'awayPlayer', 'winnerPlayer', 'court', 'venue', 'fixture.tournament']);
 
@@ -571,11 +571,17 @@ class SquashMatchScoringService
             ];
         })->values()->toArray();
 
-        // History array with optional pagination
+        // History array with optional pagination and game_number filter
         $ralliesQuery = TournamentMatchRally::where('match_id', $match->id)
             ->where('is_undone', false)
             ->with(['server', 'nextServer', 'awardedTo', 'game'])
             ->orderBy('id', 'asc');
+
+        if ($gameNumber !== null && $gameNumber > 0) {
+            $ralliesQuery->whereHas('game', function ($q) use ($gameNumber) {
+                $q->where('game_number', $gameNumber);
+            });
+        }
 
         if ($perPage !== null && $perPage > 0) {
             $paginator = $ralliesQuery->paginate($perPage, ['*'], 'page', $page);
@@ -623,6 +629,54 @@ class SquashMatchScoringService
             ];
         })->values()->toArray();
 
+        // Group history rallies game-wise
+        $groupedHistory = collect($history)->groupBy('game_number');
+        $historyByGame = [];
+
+        foreach ($games as $g) {
+            $gNum = (int) $g->game_number;
+            if ($gameNumber !== null && $gameNumber > 0 && $gNum !== $gameNumber) {
+                continue;
+            }
+            $ralliesForGame = $groupedHistory->get($gNum, collect())->values()->toArray();
+
+            $winner = User::find($g->winner_player_id);
+            $winnerName = $winner?->name ?? ($g->winner_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
+
+            $historyByGame[] = [
+                'game_number' => $gNum,
+                'status' => $g->status,
+                'score' => "{$g->home_score}-{$g->away_score}",
+                'p1_score' => (int) $g->home_score,
+                'p2_score' => (int) $g->away_score,
+                'winner_player_id' => $g->winner_player_id,
+                'winner_name' => $winnerName,
+                'total_rallies' => count($ralliesForGame),
+                'rallies' => $ralliesForGame,
+            ];
+        }
+
+        foreach ($groupedHistory as $gNum => $ralliesForGame) {
+            $gNumInt = (int) $gNum;
+            if (!collect($historyByGame)->contains('game_number', $gNumInt)) {
+                if ($gameNumber !== null && $gameNumber > 0 && $gNumInt !== $gameNumber) {
+                    continue;
+                }
+                $rArray = $ralliesForGame->values()->toArray();
+                $historyByGame[] = [
+                    'game_number' => $gNumInt,
+                    'status' => 'in_progress',
+                    'score' => '0-0',
+                    'p1_score' => 0,
+                    'p2_score' => 0,
+                    'winner_player_id' => null,
+                    'winner_name' => null,
+                    'total_rallies' => count($rArray),
+                    'rallies' => $rArray,
+                ];
+            }
+        }
+
         $winnerName = $match->winnerPlayer?->name ?? ($match->winner_player_id ? ($match->winner_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder) : null);
 
         $tournamentName = $match->fixture?->tournament?->name ?? 'Squash Tournament';
@@ -667,6 +721,7 @@ class SquashMatchScoringService
             'winner_name' => $winnerName,
             'game_timings' => $gameTimings,
             'history' => $history,
+            'history_by_game' => $historyByGame,
             'pagination' => $paginationMeta,
         ];
     }
