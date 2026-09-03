@@ -281,42 +281,122 @@
     @endif
 </div>
 
-<!-- Rally-by-Rally History Log -->
+<!-- Rally-by-Rally History Log (Game-Wise) -->
 @if($match->rallies && $match->rallies->where('is_undone', false)->isNotEmpty())
+    @php
+        $activeRallies = $match->rallies->where('is_undone', false)->sortBy('sequence');
+        $ralliesByGame = $activeRallies->groupBy(function($r) {
+            return $r->game?->game_number ?? 1;
+        });
+    @endphp
+
     <div class="card match-score-card mb-4">
-        <div class="match-score-header d-flex align-items-center justify-content-between">
-            <h6 class="fw-bold text-dark mb-0"><i class="mdi mdi-history me-2 text-info"></i>Rally-by-Rally Audit History Log</h6>
-            <span class="badge bg-label-dark rounded-pill px-3 py-1 fw-bold">{{ $match->rallies->where('is_undone', false)->count() }} Rallies</span>
+        <div class="match-score-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold text-dark mb-0"><i class="mdi mdi-history me-2 text-info"></i>Rally-by-Rally History Log</h6>
+                <small class="text-muted">Total {{ $activeRallies->count() }} rallies played across {{ $ralliesByGame->count() }} {{ Str::plural('game', $ralliesByGame->count()) }}</small>
+            </div>
+            
+            <ul class="nav nav-pills card-header-pills gap-1" id="rallyGameTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active btn-sm px-3 py-1 fw-semibold" id="tab-all-games" data-bs-toggle="tab" data-bs-target="#game-all-content" type="button" role="tab">
+                        All Rallies ({{ $activeRallies->count() }})
+                    </button>
+                </li>
+                @foreach($ralliesByGame->sortKeys() as $gNum => $gRallies)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link btn-sm px-3 py-1 fw-semibold" id="tab-game-{{ $gNum }}" data-bs-toggle="tab" data-bs-target="#game-{{ $gNum }}-content" type="button" role="tab">
+                            Game {{ $gNum }} ({{ $gRallies->count() }})
+                        </button>
+                    </li>
+                @endforeach
+            </ul>
         </div>
-        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-            <table class="table table-hover table-striped mb-0 text-center align-middle small match-score-table">
-                <thead class="bg-light sticky-top">
-                    <tr>
-                        <th class="text-dark fw-bold">Seq</th>
-                        <th class="text-dark fw-bold">Game</th>
-                        <th class="text-dark fw-bold">Server</th>
-                        <th class="text-dark fw-bold">Box</th>
-                        <th class="text-dark fw-bold">Call Type</th>
-                        <th class="text-dark fw-bold">Score After</th>
-                        <th class="text-dark fw-bold">Awarded To</th>
-                        <th class="text-dark fw-bold">Timestamp</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($match->rallies->where('is_undone', false) as $rallyItem)
-                        <tr>
-                            <td class="fw-bold">#{{ $rallyItem->sequence }}</td>
-                            <td><span class="badge bg-label-dark">G{{ $rallyItem->game?->game_number ?? 1 }}</span></td>
-                            <td class="fw-semibold text-dark">{{ $rallyItem->server?->name ?? '—' }}</td>
-                            <td><span class="badge bg-label-info fw-bold">{{ $rallyItem->serving_side }}</span></td>
-                            <td><span class="badge bg-label-primary text-capitalize fw-bold">{{ str_replace('_', ' ', $rallyItem->call_type) }}</span></td>
-                            <td class="fw-bold fs-6 text-dark">{{ $rallyItem->home_score_after }}-{{ $rallyItem->away_score_after }}</td>
-                            <td class="fw-semibold text-success">{{ $rallyItem->awardedTo?->name ?? '—' }}</td>
-                            <td class="text-muted">{{ $rallyItem->event_time ? $rallyItem->event_time->format('H:i:s') : '—' }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+
+        <div class="card-body p-0">
+            <div class="tab-content p-0" id="rallyGameTabContent">
+                <!-- All Rallies Tab -->
+                <div class="tab-pane fade show active" id="game-all-content" role="tabpanel">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover table-striped mb-0 text-center align-middle small match-score-table">
+                            <thead class="bg-light sticky-top">
+                                <tr>
+                                    <th class="text-dark fw-bold">Seq</th>
+                                    <th class="text-dark fw-bold">Game</th>
+                                    <th class="text-dark fw-bold">Server</th>
+                                    <th class="text-dark fw-bold">Box</th>
+                                    <th class="text-dark fw-bold">Call Type</th>
+                                    <th class="text-dark fw-bold">Score After</th>
+                                    <th class="text-dark fw-bold">Awarded To</th>
+                                    <th class="text-dark fw-bold">Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($activeRallies as $rallyItem)
+                                    <tr>
+                                        <td class="fw-bold">#{{ $rallyItem->sequence }}</td>
+                                        <td><span class="badge bg-label-dark">G{{ $rallyItem->game?->game_number ?? 1 }}</span></td>
+                                        <td class="fw-semibold text-dark">{{ $rallyItem->server?->name ?? ($rallyItem->server_player_id == $match->home_player_id ? $homeName : $awayName) }}</td>
+                                        <td><span class="badge bg-label-info fw-bold">{{ $rallyItem->serving_side }}</span></td>
+                                        <td><span class="badge bg-label-primary text-capitalize fw-bold">{{ str_replace('_', ' ', $rallyItem->call_type) }}</span></td>
+                                        <td class="fw-bold fs-6 text-dark">{{ $rallyItem->home_score_after }}-{{ $rallyItem->away_score_after }}</td>
+                                        <td class="fw-semibold text-success">{{ $rallyItem->awardedTo?->name ?? ($rallyItem->awarded_to_player_id ? ($rallyItem->awarded_to_player_id == $match->home_player_id ? $homeName : $awayName) : '—') }}</td>
+                                        <td class="text-muted">{{ $rallyItem->event_time ? $rallyItem->event_time->format('H:i:s') : '—' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Individual Game Tabs -->
+                @foreach($ralliesByGame->sortKeys() as $gNum => $gRallies)
+                    @php
+                        $gameModel = $match->games ? $match->games->firstWhere('game_number', $gNum) : null;
+                    @endphp
+                    <div class="tab-pane fade" id="game-{{ $gNum }}-content" role="tabpanel">
+                        <div class="bg-light px-4 py-2 border-bottom d-flex align-items-center justify-content-between">
+                            <span class="fw-bold text-dark">
+                                <i class="mdi mdi-tennis me-1 text-primary"></i> Game {{ $gNum }} Detailed Rallies Log
+                            </span>
+                            @if($gameModel)
+                                <span class="badge bg-dark">
+                                    Final Score: {{ $gameModel->home_score }} - {{ $gameModel->away_score }}
+                                    ({{ ucfirst($gameModel->status) }})
+                                </span>
+                            @endif
+                        </div>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover table-striped mb-0 text-center align-middle small match-score-table">
+                                <thead class="bg-light sticky-top">
+                                    <tr>
+                                        <th class="text-dark fw-bold">Rally #</th>
+                                        <th class="text-dark fw-bold">Server</th>
+                                        <th class="text-dark fw-bold">Box</th>
+                                        <th class="text-dark fw-bold">Call Type</th>
+                                        <th class="text-dark fw-bold">Score After</th>
+                                        <th class="text-dark fw-bold">Awarded To</th>
+                                        <th class="text-dark fw-bold">Timestamp</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($gRallies as $index => $rallyItem)
+                                        <tr>
+                                            <td class="fw-bold">#{{ $index + 1 }} (Seq #{{ $rallyItem->sequence }})</td>
+                                            <td class="fw-semibold text-dark">{{ $rallyItem->server?->name ?? ($rallyItem->server_player_id == $match->home_player_id ? $homeName : $awayName) }}</td>
+                                            <td><span class="badge bg-label-info fw-bold">{{ $rallyItem->serving_side }}</span></td>
+                                            <td><span class="badge bg-label-primary text-capitalize fw-bold">{{ str_replace('_', ' ', $rallyItem->call_type) }}</span></td>
+                                            <td class="fw-bold fs-6 text-dark">{{ $rallyItem->home_score_after }}-{{ $rallyItem->away_score_after }}</td>
+                                            <td class="fw-semibold text-success">{{ $rallyItem->awardedTo?->name ?? ($rallyItem->awarded_to_player_id ? ($rallyItem->awarded_to_player_id == $match->home_player_id ? $homeName : $awayName) : '—') }}</td>
+                                            <td class="text-muted">{{ $rallyItem->event_time ? $rallyItem->event_time->format('H:i:s') : '—' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
         </div>
     </div>
 @endif
