@@ -102,7 +102,7 @@ class PlayerMatchScoringController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'call_type' => ['required', 'string', 'in:ace,clean_winner,tin,stroke,no_let,let'],
+            'call_type' => ['required', 'string', 'in:ace,clean_winner,unforced_error,stroke,no_let,let'],
             'awarded_to_player_id' => [
                 $request->input('call_type') === 'let' ? 'nullable' : 'required',
                 'integer'

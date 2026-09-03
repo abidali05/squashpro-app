@@ -118,9 +118,9 @@ class SquashMatchScoringApiTest extends TestCase
             ->assertJsonPath('data.current_server_id', $this->player1->id)
             ->assertJsonPath('data.current_serving_side', 'L');
 
-        // 4. Record Rally - Receiver Wins (Hand-Out to Muneeb)
+        // 4. Record Rally - Receiver Wins (Hand-Out to Muneeb via unforced_error)
         $handoutResponse = $this->withHeaders($headers)->postJson("/api/v1/player/matches/{$this->match->id}/rally", [
-            'call_type' => 'tin',
+            'call_type' => 'unforced_error',
             'awarded_to_player_id' => $this->player2->id,
             'striker_player_id' => $this->player1->id,
             'handout_chosen_side' => 'R',

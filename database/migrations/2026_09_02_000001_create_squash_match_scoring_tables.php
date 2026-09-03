@@ -116,7 +116,7 @@ return new class extends Migration
 
             $table->string('serving_side', 1)->nullable();
 
-            $table->string('call_type'); // ace, clean_winner, tin, stroke, no_let, let
+            $table->string('call_type'); // ace, clean_winner, unforced_error, stroke, no_let, let
 
             $table->foreignId('striker_player_id')
                 ->nullable()
