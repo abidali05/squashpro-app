@@ -223,7 +223,10 @@ class PlayerMatchScoringController extends Controller
         }
 
         try {
-            $data = $this->scoringService->getLiveMatchStatePayload($match);
+            $perPage = $request->query('per_page') !== null ? (int) $request->query('per_page') : ($request->query('limit') !== null ? (int) $request->query('limit') : null);
+            $page = (int) $request->query('page', 1);
+
+            $data = $this->scoringService->getLiveMatchStatePayload($match, $perPage, $page);
 
             return response()->json([
                 'success' => true,

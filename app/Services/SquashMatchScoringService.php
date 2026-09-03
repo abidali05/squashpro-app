@@ -510,7 +510,7 @@ class SquashMatchScoringService
     /**
      * Construct live match state payload exact to backend specification.
      */
-    public function getLiveMatchStatePayload(TournamentMatch $match): array
+    public function getLiveMatchStatePayload(TournamentMatch $match, ?int $perPage = null, int $page = 1): array
     {
         $match->loadMissing(['homePlayer', 'awayPlayer', 'winnerPlayer', 'court', 'venue', 'fixture.tournament']);
 
@@ -571,14 +571,37 @@ class SquashMatchScoringService
             ];
         })->values()->toArray();
 
-        // History array
-        $rallies = TournamentMatchRally::where('match_id', $match->id)
+        // History array with optional pagination
+        $ralliesQuery = TournamentMatchRally::where('match_id', $match->id)
             ->where('is_undone', false)
             ->with(['server', 'nextServer', 'awardedTo', 'game'])
-            ->orderBy('id', 'asc')
-            ->get();
+            ->orderBy('id', 'asc');
 
-        $history = $rallies->map(function ($r) use ($match) {
+        if ($perPage !== null && $perPage > 0) {
+            $paginator = $ralliesQuery->paginate($perPage, ['*'], 'page', $page);
+            $ralliesCollection = collect($paginator->items());
+            $paginationMeta = [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ];
+        } else {
+            $ralliesCollection = $ralliesQuery->get();
+            $totalCount = $ralliesCollection->count();
+            $paginationMeta = [
+                'current_page' => 1,
+                'per_page' => $totalCount,
+                'total' => $totalCount,
+                'last_page' => 1,
+                'from' => $totalCount > 0 ? 1 : null,
+                'to' => $totalCount > 0 ? $totalCount : null,
+            ];
+        }
+
+        $history = $ralliesCollection->map(function ($r) use ($match) {
             $serverName = $r->server?->name ?? ($r->server_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
             $nextServerName = $r->nextServer?->name ?? ($r->next_server_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
             $awardedName = $r->awardedTo?->name ?? ($r->awarded_to_player_id ? ($r->awarded_to_player_id == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder) : null);
@@ -644,6 +667,7 @@ class SquashMatchScoringService
             'winner_name' => $winnerName,
             'game_timings' => $gameTimings,
             'history' => $history,
+            'pagination' => $paginationMeta,
         ];
     }
 }
