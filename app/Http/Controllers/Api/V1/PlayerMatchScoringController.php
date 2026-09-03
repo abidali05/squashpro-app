@@ -87,6 +87,38 @@ class PlayerMatchScoringController extends Controller
     }
 
     /**
+     * Start next game after a game break.
+     * POST /api/v1/player/matches/{match_id}/start-next-game
+     */
+    public function startNextGame(Request $request, string $matchId): JsonResponse
+    {
+        $match = TournamentMatch::find($matchId);
+        if (!$match) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match not found.',
+                'error_code' => 'NOT_FOUND'
+            ], 404);
+        }
+
+        try {
+            $data = $this->scoringService->startNextGame($match);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Next game started successfully',
+                'data' => $data,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'START_NEXT_GAME_FAILED',
+            ], 400);
+        }
+    }
+
+    /**
      * Record a rally event.
      * POST /api/v1/player/matches/{match_id}/rally
      */

@@ -101,6 +101,72 @@ class SquashMatchScoringService
     }
 
     /**
+     * Start the next game in a live match after a game break.
+     */
+    public function startNextGame(TournamentMatch $match): array
+    {
+        return DB::transaction(function () use ($match) {
+            if ($match->status === 'completed' || $match->winner_player_id) {
+                throw new Exception("Match is already completed.");
+            }
+
+            $rules = $this->getScoringRules($match);
+            $bestOf = $rules['best_of'];
+            $gamesNeededToWin = (int) ceil($bestOf / 2);
+
+            $completedGames = TournamentMatchGame::where('match_id', $match->id)
+                ->where('status', 'completed')
+                ->get();
+
+            $homeGamesWon = $completedGames->where('winner_player_id', $match->home_player_id)->count();
+            $awayGamesWon = $completedGames->where('winner_player_id', $match->away_player_id)->count();
+
+            if ($homeGamesWon >= $gamesNeededToWin || $awayGamesWon >= $gamesNeededToWin) {
+                throw new Exception("Match is already completed.");
+            }
+
+            $inProgressGame = TournamentMatchGame::where('match_id', $match->id)
+                ->where('status', 'in_progress')
+                ->first();
+
+            if ($inProgressGame) {
+                throw new Exception("Game {$inProgressGame->game_number} is already in progress.");
+            }
+
+            $lastCompletedGame = $completedGames->sortByDesc('game_number')->first();
+            if (!$lastCompletedGame) {
+                throw new Exception("No completed game found. Please start the match first.");
+            }
+
+            $nextGameNumber = $lastCompletedGame->game_number + 1;
+            $now = Carbon::now();
+
+            $startingServerId = $lastCompletedGame->winner_player_id ?? $match->current_server_id ?? $match->home_player_id;
+
+            $match->update([
+                'current_game' => $nextGameNumber,
+                'current_server_id' => $startingServerId,
+                'current_serving_side' => 'L',
+                'can_change_serving_side' => true,
+                'current_game_start_time' => $now,
+            ]);
+
+            TournamentMatchGame::create([
+                'match_id' => $match->id,
+                'game_number' => $nextGameNumber,
+                'home_score' => 0,
+                'away_score' => 0,
+                'starting_server_id' => $startingServerId,
+                'starting_serving_side' => 'L',
+                'start_time' => $now,
+                'status' => 'in_progress',
+            ]);
+
+            return $this->getLiveMatchStatePayload($match->fresh());
+        });
+    }
+
+    /**
      * Record a rally outcome and process PARS-11 state transitions.
      */
     public function recordRally(
@@ -116,24 +182,16 @@ class SquashMatchScoringService
                 ->first();
 
             if (!$currentGame) {
-                // If game was completed or not started, find or create active game
-                $currentGame = TournamentMatchGame::where('match_id', $match->id)
-                    ->where('game_number', $match->current_game)
+                $lastCompletedGame = TournamentMatchGame::where('match_id', $match->id)
+                    ->where('status', 'completed')
+                    ->orderBy('game_number', 'desc')
                     ->first();
 
-                if (!$currentGame) {
-                    $now = Carbon::now();
-                    $currentGame = TournamentMatchGame::create([
-                        'match_id' => $match->id,
-                        'game_number' => $match->current_game,
-                        'home_score' => 0,
-                        'away_score' => 0,
-                        'starting_server_id' => $match->current_server_id,
-                        'starting_serving_side' => $match->current_serving_side,
-                        'start_time' => $now,
-                        'status' => 'in_progress',
-                    ]);
+                if ($lastCompletedGame) {
+                    throw new Exception("Game {$lastCompletedGame->game_number} is completed. Please start the next game before recording rallies.");
                 }
+
+                throw new Exception("No in-progress game found. Please start the match first.");
             }
 
             $rules = $this->getScoringRules($match);
@@ -255,26 +313,12 @@ class SquashMatchScoringService
                         'match_end_time' => $now,
                     ]);
                 } else {
-                    // Match continues -> advance current_game
-                    $nextGameNumber = $match->current_game + 1;
+                    // Match continues -> pause timer & wait for start-next-game API call
                     $match->update([
-                        'current_game' => $nextGameNumber,
                         'current_server_id' => $gameWinnerId,
                         'current_serving_side' => 'L',
                         'can_change_serving_side' => true,
-                        'current_game_start_time' => $now,
-                    ]);
-
-                    // Create next game record
-                    TournamentMatchGame::create([
-                        'match_id' => $match->id,
-                        'game_number' => $nextGameNumber,
-                        'home_score' => 0,
-                        'away_score' => 0,
-                        'starting_server_id' => $gameWinnerId,
-                        'starting_serving_side' => 'L',
-                        'start_time' => $now,
-                        'status' => 'in_progress',
+                        'current_game_start_time' => null, // Timer paused during break
                     ]);
                 }
             }
@@ -379,6 +423,7 @@ class SquashMatchScoringService
                         'current_server_id' => $lastRallyInGame->next_server_player_id,
                         'current_serving_side' => $lastRallyInGame->next_serving_side,
                         'can_change_serving_side' => $lastRallyInGame->can_change_serving_side,
+                        'current_game_start_time' => $currentGame->start_time,
                     ]);
                 } else {
                     // Reset to game start state
@@ -389,6 +434,7 @@ class SquashMatchScoringService
                         'current_server_id' => $currentGame->starting_server_id ?? $match->initial_server_player_id,
                         'current_serving_side' => $currentGame->starting_serving_side ?? $match->initial_serving_side,
                         'can_change_serving_side' => true,
+                        'current_game_start_time' => $currentGame->start_time,
                     ]);
                 }
             }
@@ -496,7 +542,16 @@ class SquashMatchScoringService
         $gamesNeededToWin = (int) ceil($bestOf / 2);
 
         $isMatchOver = ($match->status === 'completed') || ($p1GamesWon >= $gamesNeededToWin || $p2GamesWon >= $gamesNeededToWin);
-        $isGameOver = $currentGame ? ($currentGame->status === 'completed') : false;
+        
+        $lastGame = $games->sortByDesc('game_number')->first();
+        $isGameOver = $lastGame ? ($lastGame->status === 'completed' && !$isMatchOver) : false;
+
+        $servingState = 'ready_to_serve';
+        if ($isMatchOver) {
+            $servingState = 'match_completed';
+        } elseif ($isGameOver) {
+            $servingState = 'waiting_next_game';
+        }
 
         // Game timings array
         $gameTimings = $completedGames->map(function ($g) use ($match) {
@@ -564,7 +619,7 @@ class SquashMatchScoringService
             'current_game' => (int) ($match->current_game ?? 1),
             'match_start_time' => $match->match_start_time?->toIso8601String(),
             'match_end_time' => $match->match_end_time?->toIso8601String(),
-            'current_game_start_time' => $match->current_game_start_time?->toIso8601String() ?? $match->match_start_time?->toIso8601String(),
+            'current_game_start_time' => $match->current_game_start_time?->toIso8601String(),
             'player_one' => [
                 'player_id' => $match->home_player_id,
                 'name' => $match->homePlayer?->name ?? $match->home_player_placeholder ?? 'Player 1',
@@ -582,7 +637,7 @@ class SquashMatchScoringService
             'current_server_id' => $match->current_server_id,
             'current_serving_side' => $match->current_serving_side,
             'can_change_serving_side' => (bool) $match->can_change_serving_side,
-            'serving_state' => 'ready_to_serve',
+            'serving_state' => $servingState,
             'is_game_over' => $isGameOver,
             'is_match_over' => $isMatchOver,
             'winner_player_id' => $match->winner_player_id,

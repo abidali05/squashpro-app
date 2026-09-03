@@ -2383,6 +2383,34 @@ class ClubService
                     ];
                 })->values()->all();
 
+                $gamesCollection = $m->relationLoaded('games') ? $m->games : \App\Models\TournamentMatchGame::where('match_id', $m->id)->orderBy('game_number', 'asc')->get();
+                $completedGames = $gamesCollection->where('status', 'completed');
+                $inProgressGame = $gamesCollection->where('status', 'in_progress')->first();
+
+                $homeGamesWon = $completedGames->where('winner_player_id', $m->home_player_id)->count();
+                $awayGamesWon = $completedGames->where('winner_player_id', $m->away_player_id)->count();
+
+                if ($completedGames->isNotEmpty()) {
+                    $homeScore = $homeGamesWon;
+                    $awayScore = $awayGamesWon;
+                } elseif ($inProgressGame) {
+                    $homeScore = (int) $inProgressGame->home_score;
+                    $awayScore = (int) $inProgressGame->away_score;
+                } else {
+                    $homeScore = 0;
+                    $awayScore = 0;
+                }
+
+                $formattedGames = $gamesCollection->map(function ($g) {
+                    return [
+                        'game_number' => (int) $g->game_number,
+                        'home_score' => (int) $g->home_score,
+                        'away_score' => (int) $g->away_score,
+                        'winner_player_id' => $g->winner_player_id ? (int) $g->winner_player_id : null,
+                        'status' => $g->status,
+                    ];
+                })->values()->all();
+
                 $fMatches[] = [
                     'match_id' => (int) $m->id,
                     'sequence' => (int) $m->sequence,
@@ -2403,9 +2431,11 @@ class ClubService
                     'umpire_ids' => $m->umpires->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                     'umpires' => $umpiresList,
                     'scores' => [
-                        'home_score' => (int) ($m->home_score ?? 0),
-                        'away_score' => (int) ($m->away_score ?? 0),
-                        'games' => $m->games ?? [],
+                        'home_score' => $homeScore,
+                        'away_score' => $awayScore,
+                        'home_games_won' => $homeGamesWon,
+                        'away_games_won' => $awayGamesWon,
+                        'games' => $formattedGames,
                     ],
                 ];
             }
@@ -2498,7 +2528,7 @@ class ClubService
 
         if ($format === 'league') {
             $savedGroups = TournamentGroup::where('tournament_id', $tournament->id)
-                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id,name', 'fixtures.matches.umpires:id,name'])
+                ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id,name', 'fixtures.matches.umpires:id,name', 'fixtures.matches.games'])
                 ->get();
 
             foreach ($savedGroups as $g) {
@@ -2528,7 +2558,7 @@ class ClubService
         } else {
             $savedFixtures = TournamentFixture::where('tournament_id', $tournament->id)
                 ->whereNull('group_id')
-                ->with(['court:id,name,type', 'homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.court:id,name,type', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id,name', 'matches.umpires:id,name'])
+                ->with(['court:id,name,type', 'homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'byeClub:id,club_name,name', 'restClub:id,club_name,name', 'matches.court:id,name,type', 'matches.homePlayer:id,name', 'matches.awayPlayer:id,name', 'matches.scorers:id,name', 'matches.umpires:id,name', 'matches.games'])
                 ->get();
 
             foreach ($savedFixtures as $f) {

@@ -88,6 +88,8 @@ Route::prefix('v1')->group(function () {
 
             // Live Squash Match Scoring Routes
             Route::post('matches/{match_id}/start', [PlayerMatchScoringController::class, 'start']);
+            Route::post('matches/{match_id}/start-next-game', [PlayerMatchScoringController::class, 'startNextGame']);
+            Route::post('matches/{match_id}/next-game', [PlayerMatchScoringController::class, 'startNextGame']);
             Route::post('matches/{match_id}/rally', [PlayerMatchScoringController::class, 'rally']);
             Route::post('matches/{match_id}/undo', [PlayerMatchScoringController::class, 'undo']);
             Route::get('matches/{match_id}/live', [PlayerMatchScoringController::class, 'live']);
