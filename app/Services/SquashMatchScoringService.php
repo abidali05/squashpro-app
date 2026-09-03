@@ -50,6 +50,19 @@ class SquashMatchScoringService
      */
     public function startMatch(TournamentMatch $match, int $tossWinnerPlayerId, int $initialServerPlayerId, string $initialServingSide): array
     {
+        if ($match->status === 'live') {
+            throw new Exception("Match is already live.");
+        }
+
+        if ($match->status === 'completed') {
+            throw new Exception("Match has already been completed.");
+        }
+
+        $hasRallies = TournamentMatchRally::where('match_id', $match->id)->exists();
+        if ($hasRallies) {
+            throw new Exception("Match is already live.");
+        }
+
         return DB::transaction(function () use ($match, $tossWinnerPlayerId, $initialServerPlayerId, $initialServingSide) {
             $now = Carbon::now();
             $rules = $this->getScoringRules($match);

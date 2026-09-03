@@ -31,6 +31,23 @@ class PlayerMatchScoringController extends Controller
             ], 404);
         }
 
+        if ($match->status === 'live') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match is already live.',
+                'error_code' => 'MATCH_ALREADY_LIVE',
+                'data' => $this->scoringService->getLiveMatchStatePayload($match),
+            ], 400);
+        }
+
+        if ($match->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Match has already been completed.',
+                'error_code' => 'MATCH_ALREADY_COMPLETED',
+            ], 400);
+        }
+
         $validator = Validator::make($request->all(), [
             'toss_winner_player_id' => ['required', 'integer'],
             'initial_server_player_id' => ['required', 'integer'],
@@ -60,11 +77,12 @@ class PlayerMatchScoringController extends Controller
                 'data' => $data,
             ]);
         } catch (Exception $e) {
+            $code = $e->getMessage() === 'Match is already live.' ? 'MATCH_ALREADY_LIVE' : 'START_MATCH_FAILED';
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => 'START_MATCH_FAILED',
-            ], 500);
+                'error_code' => $code,
+            ], 400);
         }
     }
 
