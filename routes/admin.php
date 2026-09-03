@@ -104,9 +104,10 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'show'])->name('tournament-pools.show');
         Route::delete('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'destroy'])->name('tournament-pools.destroy');
 
-        // Fixtures Management
+        // Fixtures & Matches Management
         Route::get('fixtures', [FixtureManagementController::class, 'index'])->name('fixtures.index');
         Route::get('fixtures/{fixture}', [FixtureManagementController::class, 'show'])->name('fixtures.show');
+        Route::get('matches/{match}', [FixtureManagementController::class, 'showMatch'])->name('matches.show');
         Route::delete('fixtures/{fixture}', [FixtureManagementController::class, 'destroy'])->name('fixtures.destroy');
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('revenue-reports', [RevenueReportController::class, 'index'])->name('revenue.index');

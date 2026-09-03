@@ -81,6 +81,19 @@
         color: #ffffff !important;
         border-color: #000000 !important;
     }
+
+    /* Match Table Styling */
+    .fixture-matches-table th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 12px 16px !important;
+    }
+
+    .fixture-matches-table td {
+        padding: 14px 16px !important;
+        vertical-align: middle;
+    }
 </style>
 
 <!-- Page Header -->
@@ -166,7 +179,7 @@
         <div class="card fixture-unified-card fixture-filter-item" data-round="{{ $roundSlug }}" data-group="{{ $groupSlug }}">
             <!-- Fixture Header Bar -->
             <div class="fixture-unified-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="badge bg-dark text-white fw-bold px-2.5 py-1">Fixture #{{ $fItem->id }}</span>
                     <span class="fw-bold text-dark fs-6 ms-1">{{ $fItem->round }}</span>
                     <span class="text-muted">•</span>
@@ -176,15 +189,15 @@
                         <span class="badge bg-label-secondary px-2.5 py-1 fw-semibold">Knockout Stage</span>
                     @endif
 
-                    @if($fItem->court)
-                        <span class="badge bg-label-success px-2.5 py-1 fw-semibold ms-1">
-                            <i class="mdi mdi-map-marker-outline me-1"></i>{{ $fItem->court->name }}
+                    @if($fVenueId || $fVenueName)
+                        <span class="badge bg-label-info px-2.5 py-1 fw-semibold ms-1">
+                            <i class="mdi mdi-domain me-1"></i>{{ $fVenueName ?: 'Venue' }}
                         </span>
                     @endif
 
-                    @if($fVenueId)
-                        <span class="badge bg-label-info px-2.5 py-1 fw-semibold ms-1">
-                            <i class="mdi mdi-domain me-1"></i>{{ $fVenueName ? $fVenueName . ' (Venue #' . $fVenueId . ')' : 'Venue #' . $fVenueId }}
+                    @if($fItem->court)
+                        <span class="badge bg-label-success px-2.5 py-1 fw-semibold ms-1">
+                            <i class="mdi mdi-map-marker-outline me-1"></i>{{ $fItem->court->name }}
                         </span>
                     @endif
                 </div>
@@ -246,18 +259,18 @@
 
             <!-- Matches Schedule Table -->
             @if($fItem->matches->isNotEmpty())
-                <div class="table-responsive text-nowrap">
-                    <table class="table table-hover mb-0 align-middle">
+                <div class="table-responsive border-top">
+                    <table class="table table-hover table-striped mb-0 align-middle fixture-matches-table">
                         <thead>
                             <tr class="bg-light">
-                                <th class="text-dark fw-bold ps-4">Seq #</th>
-                                <th class="text-dark fw-bold">Home Player</th>
-                                <th class="text-dark fw-bold">Away Player</th>
-                                <th class="text-dark fw-bold">Court / Venue</th>
-                                <th class="text-dark fw-bold">Date & Time</th>
-                                <th class="text-dark fw-bold">Status</th>
-                                <th class="text-dark fw-bold">Score / Winner</th>
-                                <th class="text-dark fw-bold pe-4">Officials</th>
+                                <th class="text-dark fw-bold ps-4" style="width: 70px;">Seq #</th>
+                                <th class="text-dark fw-bold" style="min-width: 130px;">Home Player</th>
+                                <th class="text-dark fw-bold" style="min-width: 130px;">Away Player</th>
+                                <th class="text-dark fw-bold" style="min-width: 150px;">Venue / Court</th>
+                                <th class="text-dark fw-bold" style="min-width: 120px;">Date & Time</th>
+                                <th class="text-dark fw-bold" style="width: 100px;">Status</th>
+                                <th class="text-dark fw-bold" style="min-width: 100px;">Score</th>
+                                <th class="text-dark fw-bold pe-4 text-end" style="width: 140px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -283,25 +296,30 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($m->court)
-                                            <span class="badge bg-label-success px-2.5 py-1 fw-semibold me-1">
-                                                <i class="mdi mdi-map-marker-outline me-1"></i>{{ $m->court->name }}
-                                            </span>
-                                        @endif
+                                        <div class="d-flex flex-column align-items-start gap-1">
+                                            @if($mVenueName || $m->venue_id)
+                                                <span class="badge bg-label-info px-2 py-1 fw-semibold text-wrap text-start">
+                                                    <i class="mdi mdi-domain me-1"></i>{{ $mVenueName ?: 'Venue' }}
+                                                </span>
+                                            @endif
 
-                                        @if($m->venue_id || $mVenueName)
-                                            <span class="badge bg-label-info px-2.5 py-1 fw-semibold">
-                                                <i class="mdi mdi-domain me-1"></i>{{ $mVenueName ? $mVenueName . ' (Venue #' . $m->venue_id . ')' : 'Venue #' . $m->venue_id }}
-                                            </span>
-                                        @endif
+                                            @if($m->court)
+                                                <span class="badge bg-label-success px-2 py-1 fw-semibold text-wrap text-start">
+                                                    <i class="mdi mdi-map-marker-outline me-1"></i>{{ $m->court->name }}
+                                                </span>
+                                            @endif
 
-                                        @if(!$m->court && !$m->venue_id && !$mVenueName)
-                                            <span class="text-muted small">Unassigned</span>
-                                        @endif
+                                            @if(!$m->court && !$m->venue_id && !$mVenueName)
+                                                <span class="text-muted small">Unassigned</span>
+                                            @endif
+                                        </div>
                                     </td>
                                     <td class="text-dark fw-medium">
                                         @if($m->start_date || $m->start_time)
-                                            <span>{{ $m->start_date ? (is_string($m->start_date) ? $m->start_date : $m->start_date->format('Y-m-d')) : '' }} {{ $m->start_time }}</span>
+                                            <span class="fw-bold text-dark d-block text-nowrap"><i class="mdi mdi-calendar-outline me-1 text-primary"></i>{{ $m->start_date ? (is_string($m->start_date) ? $m->start_date : $m->start_date->format('Y-m-d')) : '' }}</span>
+                                            @if($m->start_time)
+                                                <small class="text-muted d-block mt-0.5 text-nowrap"><i class="mdi mdi-clock-outline me-1 text-info"></i>{{ $m->start_time }}</small>
+                                            @endif
                                         @else
                                             <span class="text-muted small">TBD</span>
                                         @endif
@@ -311,24 +329,15 @@
                                     </td>
                                     <td>
                                         @if($m->score)
-                                            <span class="fw-bold text-dark fs-6">{{ $m->score }}</span>
-                                        @endif
-                                        @if($m->winnerPlayer)
-                                            <small class="d-block text-success fw-bold mt-0.5"><i class="mdi mdi-trophy-outline me-1"></i>{{ $m->winnerPlayer->name }}</small>
-                                        @elseif(!$m->score)
+                                            <span class="fw-bold text-dark fs-6 d-block">{{ $m->score }}</span>
+                                        @else
                                             <span class="text-muted small">—</span>
                                         @endif
                                     </td>
-                                    <td class="pe-4 text-dark small">
-                                        @if($m->scorers->isNotEmpty())
-                                            <small class="d-block text-dark fw-semibold">Scorer: {{ $m->scorers->pluck('name')->implode(', ') }}</small>
-                                        @endif
-                                        @if($m->umpires->isNotEmpty())
-                                            <small class="d-block text-dark fw-semibold">Umpire: {{ $m->umpires->pluck('name')->implode(', ') }}</small>
-                                        @endif
-                                        @if($m->scorers->isEmpty() && $m->umpires->isEmpty())
-                                            <span class="text-muted small">None</span>
-                                        @endif
+                                    <td class="pe-4 text-end">
+                                        <a href="{{ route('admin.matches.show', $m) }}" class="btn btn-sm btn-outline-primary shadow-xs fw-semibold text-nowrap">
+                                            <i class="mdi mdi-chart-box-outline me-1"></i>Detail Score
+                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

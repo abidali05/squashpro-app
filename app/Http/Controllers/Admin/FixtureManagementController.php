@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Court;
 use App\Models\Tournament;
 use App\Models\TournamentFixture;
+use App\Models\TournamentMatch;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -129,6 +130,31 @@ class FixtureManagementController extends Controller
         $fixture = $fixtures->first();
 
         return view('content.admin.tournaments.fixture-show', compact('tournament', 'fixtures', 'fixture'));
+    }
+
+    public function showMatch(TournamentMatch $match): View
+    {
+        $match->load([
+            'fixture.tournament.club',
+            'fixture.homeClub',
+            'fixture.awayClub',
+            'fixture.byeClub',
+            'fixture.restClub',
+            'homePlayer',
+            'awayPlayer',
+            'winnerPlayer',
+            'court',
+            'venue',
+            'scorers',
+            'umpires',
+            'games.winner',
+            'rallies.server',
+            'rallies.nextServer',
+            'rallies.awardedTo',
+            'rallies.game',
+        ]);
+
+        return view('content.admin.tournaments.match-show', compact('match'));
     }
 
     public function destroy(TournamentFixture $fixture): RedirectResponse
