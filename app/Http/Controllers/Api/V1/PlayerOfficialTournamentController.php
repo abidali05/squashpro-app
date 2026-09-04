@@ -33,24 +33,36 @@ class PlayerOfficialTournamentController extends Controller
         $date = $request->query('date');
         $user = $request->user();
 
-        $tournaments = Tournament::where(function ($query) use ($user) {
-            $query->whereHas('scorers', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
-            })->orWhereHas('umpires', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
-            });
+        $tournaments = Tournament::whereHas('fixtures')
+        ->whereHas('fixtures.matches', function ($mq) use ($date, $user) {
+            $mq->whereDate('start_date', $date)
+               ->where(function ($sq) use ($user) {
+                   $sq->whereHas('scorers', function ($scQ) use ($user) {
+                       $scQ->where('user_id', $user->id);
+                   })->orWhereHas('umpires', function ($umQ) use ($user) {
+                       $umQ->where('user_id', $user->id);
+                   });
+               });
         })
-        ->whereDate('start_date', '<=', $date)
-        ->whereDate('end_date', '>=', $date)
         ->with(['club:id,club_name,name,club_logo', 'scorers:id', 'umpires:id'])
         ->paginate($request->query('per_page', 10));
 
-        $mapped = collect($tournaments->items())->map(function ($t) use ($user) {
+        $mapped = collect($tournaments->items())->map(function ($t) use ($user, $date) {
+            $dateMatches = \App\Models\TournamentMatch::whereHas('fixture', function ($fq) use ($t) {
+                $fq->where('tournament_id', $t->id);
+            })
+            ->whereDate('start_date', $date)
+            ->with(['scorers:id', 'umpires:id'])
+            ->get();
+
+            $isScorer = $dateMatches->pluck('scorers')->collapse()->pluck('id')->contains($user->id);
+            $isUmpire = $dateMatches->pluck('umpires')->collapse()->pluck('id')->contains($user->id);
+
             $roles = [];
-            if ($t->scorers->contains($user->id)) {
+            if ($isScorer || $t->scorers->contains($user->id)) {
                 $roles[] = 'scorer';
             }
-            if ($t->umpires->contains($user->id)) {
+            if ($isUmpire || $t->umpires->contains($user->id)) {
                 $roles[] = 'umpire';
             }
 
@@ -67,7 +79,7 @@ class PlayerOfficialTournamentController extends Controller
                     'club_name' => $t->club?->club_name ?? $t->club?->name,
                     'club_logo' => app_image_url($t->club?->club_logo)
                 ],
-                'assigned_roles' => $roles
+                'assigned_roles' => array_values(array_unique($roles))
             ];
         });
 
