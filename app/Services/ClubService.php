@@ -2255,11 +2255,11 @@ class ClubService
             }
         }
 
-        $groupPlayerIds = DB::table('tournament_group_clubs')
-            ->join('tournament_groups', 'tournament_group_clubs.group_id', '=', 'tournament_groups.id')
-            ->where('tournament_groups.tournament_id', $tournament->id)
-            ->pluck('tournament_group_clubs.club_id');
-        $playerIds = $playerIds->merge($groupPlayerIds);
+        $teamPlayerIds = DB::table('tournament_team_players')
+            ->join('tournament_teams', 'tournament_team_players.team_id', '=', 'tournament_teams.id')
+            ->where('tournament_teams.tournament_id', $tournament->id)
+            ->pluck('tournament_team_players.player_id');
+        $playerIds = $playerIds->merge($teamPlayerIds);
 
         if ($tournamentType === 'CLUB_MEMBERS_ONLY') {
             $fixturePlayerIds = TournamentFixture::where('tournament_id', $tournament->id)
@@ -2284,6 +2284,10 @@ class ClubService
         if ($uniquePlayerIds->isNotEmpty()) {
             $playerUsers = User::whereIn('id', $uniquePlayerIds)->get();
             foreach ($playerUsers as $pu) {
+                if ($pu->role === 'club' || $pu->role === 'club_admin' || $pu->role === 'admin' || (! empty($pu->club_name) && empty($pu->playing_level))) {
+                    continue;
+                }
+
                 $membership = ClubMembership::where('player_id', $pu->id)
                     ->where('status', 'approved')
                     ->with('club')
