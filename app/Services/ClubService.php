@@ -2976,6 +2976,11 @@ class ClubService
             $this->apiError('Match not found.', 'NOT_FOUND', 404);
         }
 
+        $matchStatus = strtolower((string) $match->status);
+        if (in_array($matchStatus, ['completed', 'live', 'in_progress', 'in-progress'], true)) {
+            $this->apiError('Cannot reschedule a match that is already live or completed.', 'INVALID_MATCH_STATUS', 422);
+        }
+
         $newDate = $data['scheduled_date'] ?? $match->start_date;
         $newTime = $data['scheduled_time'] ?? $match->start_time;
         $courtId = isset($data['court_id']) ? (int) $data['court_id'] : $match->court_id;
