@@ -2602,6 +2602,60 @@ class ClubService
             }
         }
 
+        $rule = ClubTournamentRule::where('tournament_id', $tournament->id)->first();
+        $qualifiersPerPool = (int) ($rule?->pool_rules['qualifiers_per_pool'] ?? 2);
+        if ($qualifiersPerPool < 1) {
+            $qualifiersPerPool = 1;
+        }
+
+        $resolveQualifiedClub = function (?string $placeholder, ?int $clubId, $clubRelation) use ($poolStandings) {
+            if ($clubId && $clubRelation) {
+                return [
+                    'club_id' => (int) $clubId,
+                    'club_name' => $clubRelation->club_name ?? $clubRelation->name,
+                ];
+            }
+
+            if (! empty($placeholder) && ! empty($poolStandings)) {
+                $cleanP = strtolower(trim($placeholder));
+                foreach ($poolStandings as $gId => $gData) {
+                    $gName = $gData['group_name'] ?? '';
+                    foreach ($gData['standings'] as $st) {
+                        if (empty($st['qualifies_for_knockout'])) {
+                            continue;
+                        }
+                        $rank = (int) ($st['rank'] ?? 1);
+                        $seedStr1 = strtolower("{$gName} #{$rank}");
+                        $seedStr2 = strtolower("Pool {$gName} #{$rank}");
+                        $seedStr3 = strtolower("Group {$gName} #{$rank}");
+                        $seedStr4 = strtolower("{$gName} Winner");
+                        $seedStr5 = strtolower("Pool {$gName} Winner");
+                        $seedStr6 = strtolower("Group {$gName} Winner");
+                        $seedStr7 = strtolower("{$gName} Runner-Up");
+                        $seedStr8 = strtolower("Pool {$gName} Runner-Up");
+                        $seedStr9 = strtolower("Group {$gName} Runner-Up");
+
+                        $matchesGroup = str_contains($cleanP, strtolower($gName)) || in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3, $seedStr4, $seedStr5, $seedStr6, $seedStr7, $seedStr8, $seedStr9], true);
+
+                        if ($matchesGroup) {
+                            $isRank1Match = ($rank === 1 && (str_contains($cleanP, '#1') || str_contains($cleanP, 'winner')));
+                            $isRank2Match = ($rank === 2 && (str_contains($cleanP, '#2') || str_contains($cleanP, 'runner')));
+                            $exactMatch = in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3], true);
+
+                            if ($isRank1Match || $isRank2Match || $exactMatch) {
+                                return [
+                                    'club_id' => (int) $st['club_id'],
+                                    'club_name' => $st['club_name'],
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null;
+        };
+
         $knockoutRounds = [];
         $knockoutFixtures = TournamentFixture::where('tournament_id', $tournament->id)
             ->whereNull('group_id')
@@ -2613,13 +2667,16 @@ class ClubService
             foreach ($roundsGrouped as $rName => $rFixes) {
                 $rFixFormatted = [];
                 foreach ($rFixes as $kf) {
+                    $homeResolved = $resolveQualifiedClub($kf->home_placeholder, $kf->home_club_id, $kf->homeClub);
+                    $awayResolved = $resolveQualifiedClub($kf->away_placeholder, $kf->away_club_id, $kf->awayClub);
+
                     $rFixFormatted[] = [
                         'fixture_id' => (int) $kf->id,
-                        'placeholder_home' => $kf->home_placeholder ?: ($kf->homeClub ? ($kf->homeClub->club_name ?? $kf->homeClub->name) : 'TBD'),
-                        'placeholder_away' => $kf->away_placeholder ?: ($kf->awayClub ? ($kf->awayClub->club_name ?? $kf->awayClub->name) : 'TBD'),
-                        'is_locked_from_pool' => (bool) ($kf->status === 'scheduled' && ! $kf->home_club_id),
-                        'home_club' => $kf->homeClub ? ['club_id' => (int) $kf->home_club_id, 'club_name' => $kf->homeClub->club_name ?? $kf->homeClub->name] : null,
-                        'away_club' => $kf->awayClub ? ['club_id' => (int) $kf->away_club_id, 'club_name' => $kf->awayClub->club_name ?? $kf->awayClub->name] : null,
+                        'placeholder_home' => $homeResolved ? $homeResolved['club_name'] : ($kf->home_placeholder ?: ($kf->homeClub ? ($kf->homeClub->club_name ?? $kf->homeClub->name) : 'TBD')),
+                        'placeholder_away' => $awayResolved ? $awayResolved['club_name'] : ($kf->away_placeholder ?: ($kf->awayClub ? ($kf->awayClub->club_name ?? $kf->awayClub->name) : 'TBD')),
+                        'is_locked_from_pool' => (bool) ($kf->status === 'scheduled' && ! $kf->home_club_id && ! $homeResolved),
+                        'home_club' => $homeResolved ? ['club_id' => (int) $homeResolved['club_id'], 'club_name' => $homeResolved['club_name']] : null,
+                        'away_club' => $awayResolved ? ['club_id' => (int) $awayResolved['club_id'], 'club_name' => $awayResolved['club_name']] : null,
                         'status' => $kf->status,
                     ];
                 }
@@ -2638,7 +2695,7 @@ class ClubService
             'format' => $format,
             'has_pools' => count($groups) > 0,
             'group_count' => count($groups),
-            'qualifiers_per_pool' => 2,
+            'qualifiers_per_pool' => $qualifiersPerPool,
             'players' => $playersList,
             'groups' => $groups,
             'fixtures' => $fixtures,
@@ -2844,7 +2901,12 @@ class ClubService
                 return $b['point_difference'] <=> $a['point_difference'];
             });
 
-            $qualifiersPerPool = 2;
+            $rule = ClubTournamentRule::where('tournament_id', $tournament->id)->first();
+            $qualifiersPerPool = (int) ($rule?->pool_rules['qualifiers_per_pool'] ?? 2);
+            if ($qualifiersPerPool < 1) {
+                $qualifiersPerPool = 1;
+            }
+
             foreach ($standingsList as $idx => &$st) {
                 $rank = $idx + 1;
                 $st['rank'] = $rank;
