@@ -2219,7 +2219,7 @@ class ClubService
         });
     }
 
-    public function getFixtures(User $club, string $tournamentId, ?int $playerIdFilter = null, ?int $officialIdFilter = null): array
+    public function getFixtures(User $club, string $tournamentId, ?int $playerIdFilter = null, ?int $officialIdFilter = null, ?string $matchStartDateFilter = null): array
     {
         $tournament = Tournament::find($tournamentId);
         if (! $tournament) {
@@ -2305,7 +2305,7 @@ class ClubService
             }
         }
 
-        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter, $officialIdFilter) {
+        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter, $officialIdFilter, $matchStartDateFilter) {
             $fMatches = [];
             foreach ($f->matches as $m) {
                 $homePId = (int) ($m->home_player_id ?? 0);
@@ -2322,6 +2322,21 @@ class ClubService
                     $mUmpireIds = $m->umpires->pluck('id')->map(fn ($id) => (int) $id)->all();
 
                     if (! in_array($officialIdFilter, $mScorerIds, true) && ! in_array($officialIdFilter, $mUmpireIds, true)) {
+                        continue;
+                    }
+                }
+
+                if ($matchStartDateFilter !== null && $matchStartDateFilter !== '') {
+                    $mStartDate = null;
+                    if ($m->start_date) {
+                        if ($m->start_date instanceof \DateTimeInterface) {
+                            $mStartDate = $m->start_date->format('Y-m-d');
+                        } else {
+                            $mStartDate = substr((string) $m->start_date, 0, 10);
+                        }
+                    }
+
+                    if ($mStartDate !== $matchStartDateFilter) {
                         continue;
                     }
                 }
@@ -2518,6 +2533,12 @@ class ClubService
             }
 
             if ($officialIdFilter !== null && $officialIdFilter > 0) {
+                if (empty($fMatches)) {
+                    return null;
+                }
+            }
+
+            if ($matchStartDateFilter !== null && $matchStartDateFilter !== '') {
                 if (empty($fMatches)) {
                     return null;
                 }

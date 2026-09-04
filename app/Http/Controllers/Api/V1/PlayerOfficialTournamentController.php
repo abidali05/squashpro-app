@@ -201,7 +201,19 @@ class PlayerOfficialTournamentController extends Controller
         }
 
         $playerId = $request->filled('player_id') ? (int) $request->input('player_id') : null;
-        $fixturesData = $this->clubService->getFixtures($request->user(), $tournamentId, $playerId, $user->id);
+        $matchStartDate = $request->input('match_start_date') 
+            ?? $request->input('start_date') 
+            ?? $request->input('date');
+
+        if ($matchStartDate) {
+            try {
+                $matchStartDate = \Carbon\Carbon::parse($matchStartDate)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                $matchStartDate = null;
+            }
+        }
+
+        $fixturesData = $this->clubService->getFixtures($request->user(), $tournamentId, $playerId, $user->id, $matchStartDate);
 
         return response()->json([
             'success' => true,

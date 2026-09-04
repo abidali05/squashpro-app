@@ -149,7 +149,19 @@ class PlayerTournamentController extends Controller
     public function fixtures(Request $request, string $tournament_id): JsonResponse
     {
         $playerId = $request->filled('player_id') ? (int) $request->input('player_id') : null;
-        $data = $this->clubService->getFixtures($request->user(), $tournament_id, $playerId);
+        $matchStartDate = $request->input('match_start_date') 
+            ?? $request->input('start_date') 
+            ?? $request->input('date');
+
+        if ($matchStartDate) {
+            try {
+                $matchStartDate = \Carbon\Carbon::parse($matchStartDate)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                $matchStartDate = null;
+            }
+        }
+
+        $data = $this->clubService->getFixtures($request->user(), $tournament_id, $playerId, null, $matchStartDate);
 
         return response()->json([
             'success' => true,

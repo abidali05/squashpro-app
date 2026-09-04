@@ -169,7 +169,12 @@ class PlayerOfficialTournamentTest extends TestCase
             ->getJson("/api/v1/player/official-tournaments/{$tournament->id}/fixtures");
         $response->assertOk();
 
-        // 2. Unauthorized access
+        // 2. Access with match_start_date filter
+        $responseWithDate = $this->withHeader('Authorization', 'Bearer ' . $this->officialToken)
+            ->getJson("/api/v1/player/official-tournaments/{$tournament->id}/fixtures?match_start_date=2026-08-11");
+        $responseWithDate->assertOk();
+
+        // 3. Unauthorized access
         $response = $this->withHeader('Authorization', 'Bearer ' . $this->unauthToken)
             ->getJson("/api/v1/player/official-tournaments/{$tournament->id}/fixtures");
         $response->assertStatus(403);
