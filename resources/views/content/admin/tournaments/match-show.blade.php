@@ -115,7 +115,7 @@
     <div class="card-body p-4">
         <div class="row align-items-center text-center">
             <!-- Home Player -->
-            <div class="col-md-5 mb-3 mb-md-0">
+            <div class="col-md-4 mb-3 mb-md-0">
                 <div class="avatar avatar-xl mx-auto mb-2 bg-label-primary rounded-circle d-flex align-items-center justify-content-center shadow-xs" style="width:64px;height:64px;">
                     <i class="mdi mdi-account fs-2"></i>
                 </div>
@@ -124,10 +124,10 @@
             </div>
 
             <!-- Score / VS Center -->
-            <div class="col-md-2 mb-3 mb-md-0">
+            <div class="col-md-4 mb-3 mb-md-0">
                 <div class="vs-badge-hero mb-2">VS</div>
                 @if($match->score)
-                    <div class="bg-dark text-white rounded px-3 py-1.5 fw-bold fs-4 d-inline-block shadow-sm">
+                    <div class="rounded px-3 py-1.5 fw-semibold d-inline-block border-0" style="background-color: #f1f5f9; color: #000000; font-size: 14px;">
                         {{ $match->score }}
                     </div>
                 @else
@@ -142,7 +142,7 @@
             </div>
 
             <!-- Away Player -->
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div class="avatar avatar-xl mx-auto mb-2 bg-label-danger rounded-circle d-flex align-items-center justify-content-center shadow-xs" style="width:64px;height:64px;">
                     <i class="mdi mdi-account fs-2"></i>
                 </div>
