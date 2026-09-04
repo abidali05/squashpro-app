@@ -2598,12 +2598,32 @@ class ClubService
                 ];
             }
 
+            $nonCancelledMatches = $f->matches->reject(fn ($m) => $m->status === 'cancelled');
+            foreach ($nonCancelledMatches as $m) {
+                if ($m->winner_player_id !== null && $m->status !== 'completed') {
+                    $m->update(['status' => 'completed']);
+                    $m->status = 'completed';
+                }
+            }
+
+            $fStatus = $f->status;
+            if ($nonCancelledMatches->isNotEmpty() && $nonCancelledMatches->every(fn ($m) => $m->status === 'completed' || $m->winner_player_id !== null)) {
+                $fStatus = 'completed';
+                if ($f->status !== 'completed') {
+                    $f->update(['status' => 'completed']);
+                }
+            } elseif ($nonCancelledMatches->contains(fn ($m) => in_array($m->status, ['in_progress', 'live', 'completed'], true) || $m->winner_player_id !== null)) {
+                if ($fStatus === 'scheduled') {
+                    $fStatus = 'in_progress';
+                }
+            }
+
             $fixData = [
                 'fixture_id' => (int) $f->id,
                 'round' => $f->round,
                 'is_bye' => (bool) $f->is_bye,
                 'is_rest' => (bool) $f->is_rest,
-                'status' => $f->status,
+                'status' => $fStatus,
             ];
 
             if ($tournamentType === 'CLUB_MEMBERS_ONLY') {
@@ -2750,11 +2770,31 @@ class ClubService
                 }
 
                 $gFixtures = [];
+                $realFixturesCount = 0;
+                $completedFixturesCount = 0;
+                $startedFixturesCount = 0;
+
                 foreach ($g->fixtures as $f) {
                     $formatted = $formatFixture($f);
                     if ($formatted !== null) {
                         $gFixtures[] = $formatted;
+                        if (! ($f->is_rest || $f->is_bye)) {
+                            $realFixturesCount++;
+                            if (($formatted['status'] ?? '') === 'completed') {
+                                $completedFixturesCount++;
+                            } elseif (in_array($formatted['status'] ?? '', ['in_progress', 'live'], true)) {
+                                $startedFixturesCount++;
+                            }
+                        }
                     }
+                }
+
+                if ($realFixturesCount > 0 && $completedFixturesCount === $realFixturesCount) {
+                    $groupStatus = 'completed';
+                } elseif ($completedFixturesCount > 0 || $startedFixturesCount > 0) {
+                    $groupStatus = 'in_progress';
+                } else {
+                    $groupStatus = 'scheduled';
                 }
 
                 $gStandings = $poolStandings[$g->id]['standings'] ?? [];
@@ -2762,7 +2802,7 @@ class ClubService
                 $groups[] = [
                     'group_id' => (int) $g->id,
                     'group_name' => $g->name,
-                    'status' => 'in_progress',
+                    'status' => $groupStatus,
                     'standings' => $gStandings,
                     'clubs' => $gClubs,
                     'fixtures' => $gFixtures,
@@ -3097,10 +3137,33 @@ class ClubService
             }
             unset($st);
 
+            $realCount = 0;
+            $compCount = 0;
+            $startCount = 0;
+            foreach ($group->fixtures as $gfx) {
+                if (! ($gfx->is_rest || $gfx->is_bye)) {
+                    $realCount++;
+                    $mList = $gfx->matches;
+                    if ($mList->isNotEmpty() && $mList->every(fn ($m) => $m->status === 'completed')) {
+                        $compCount++;
+                    } elseif ($mList->contains(fn ($m) => in_array($m->status, ['completed', 'in_progress', 'live'], true))) {
+                        $startCount++;
+                    }
+                }
+            }
+
+            if ($realCount > 0 && $compCount === $realCount) {
+                $gCalcStatus = 'completed';
+            } elseif ($compCount > 0 || $startCount > 0) {
+                $gCalcStatus = 'in_progress';
+            } else {
+                $gCalcStatus = 'scheduled';
+            }
+
             $allGroupStandings[$group->id] = [
                 'group_id' => (int) $group->id,
                 'group_name' => $group->name,
-                'status' => 'in_progress',
+                'status' => $gCalcStatus,
                 'standings' => $standingsList,
             ];
         }

@@ -309,9 +309,17 @@ class SquashMatchScoringService
                     $matchWinnerId = ($homeGamesWon > $awayGamesWon) ? $match->home_player_id : $match->away_player_id;
 
                     $match->update([
+                        'status' => 'completed',
                         'winner_player_id' => $matchWinnerId,
                         'match_end_time' => $now,
                     ]);
+
+                    if ($match->fixture_id) {
+                        $fMatches = TournamentMatch::where('fixture_id', $match->fixture_id)->get();
+                        if ($fMatches->isNotEmpty() && $fMatches->every(fn ($m) => $m->id === $match->id || $m->status === 'completed' || $m->winner_player_id !== null)) {
+                            TournamentFixture::where('id', $match->fixture_id)->update(['status' => 'completed']);
+                        }
+                    }
                 } else {
                     // Match continues -> pause timer & wait for start-next-game API call
                     $match->update([
@@ -493,6 +501,13 @@ class SquashMatchScoringService
                 'match_end_time' => $now,
                 'score' => $finalScoreStr,
             ]);
+
+            if ($match->fixture) {
+                $fMatches = $match->fixture->matches;
+                if ($fMatches->isNotEmpty() && $fMatches->every(fn ($m) => $m->status === 'completed' || $m->winner_player_id !== null)) {
+                    $match->fixture->update(['status' => 'completed']);
+                }
+            }
 
             $winnerUser = User::find($winnerPlayerId);
             $winnerName = $winnerUser?->name ?? ($winnerPlayerId == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
