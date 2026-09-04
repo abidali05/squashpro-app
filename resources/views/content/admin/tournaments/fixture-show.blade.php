@@ -162,7 +162,7 @@
         background: #ffffff !important;
         font-weight: 600;
         border-radius: 18px;
-        padding: 4px 12px;
+        padding: 5px 14px;
         font-size: 11.5px !important;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -320,8 +320,8 @@
 
 <!-- Round / Group Filter Pills -->
 @if($rounds->count() > 1 || $groups->count() > 0)
-    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap bg-white p-2.5 rounded border shadow-xs">
-        <span class="fw-bold text-dark me-1" style="font-size: 12px;"><i class="mdi mdi-filter-variant me-1"></i> Filter Fixtures:</span>
+    <div class="d-flex align-items-center gap-2 mb-4 flex-wrap bg-white rounded-3 border shadow-xs" style="padding: 12px 20px !important;">
+        <span class="fw-bold text-dark me-2" style="font-size: 12px;"><i class="mdi mdi-filter-variant me-1"></i> Filter Fixtures:</span>
         <button type="button" class="fixture-filter-btn active" data-filter="all">All Fixtures</button>
         
         @foreach($rounds as $rnd)
