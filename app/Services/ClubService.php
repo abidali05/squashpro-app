@@ -16,6 +16,7 @@ use App\Models\TournamentFixture;
 use App\Models\TournamentGroup;
 use App\Models\TournamentInvitation;
 use App\Models\TournamentMatch;
+use App\Models\TournamentMatchGame;
 use App\Models\TournamentRegistration;
 use App\Models\TournamentTeam;
 use App\Models\TournamentTeamPlayer;
@@ -2398,7 +2399,7 @@ class ClubService
                     ];
                 })->values()->all();
 
-                $gamesCollection = $m->relationLoaded('games') ? $m->games : \App\Models\TournamentMatchGame::where('match_id', $m->id)->orderBy('game_number', 'asc')->get();
+                $gamesCollection = $m->relationLoaded('games') ? $m->games : TournamentMatchGame::where('match_id', $m->id)->orderBy('game_number', 'asc')->get();
                 $completedGames = $gamesCollection->where('status', 'completed');
                 $inProgressGame = $gamesCollection->where('status', 'in_progress')->first();
 
@@ -2547,6 +2548,8 @@ class ClubService
             return $fixData;
         };
 
+        $poolStandings = $this->calculatePoolStandings($tournament);
+
         if ($format === 'league') {
             $savedGroups = TournamentGroup::where('tournament_id', $tournament->id)
                 ->with(['clubs:id,club_name,club_logo,name', 'fixtures.court:id,name,type', 'fixtures.homeClub:id,club_name,club_logo,name', 'fixtures.awayClub:id,club_name,club_logo,name', 'fixtures.byeClub:id,club_name,name', 'fixtures.restClub:id,club_name,name', 'fixtures.matches.court:id,name,type', 'fixtures.matches.homePlayer:id,name', 'fixtures.matches.awayPlayer:id,name', 'fixtures.matches.scorers:id,name', 'fixtures.matches.umpires:id,name', 'fixtures.matches.games'])
@@ -2570,8 +2573,13 @@ class ClubService
                     }
                 }
 
+                $gStandings = $poolStandings[$g->id]['standings'] ?? [];
+
                 $groups[] = [
+                    'group_id' => (int) $g->id,
                     'group_name' => $g->name,
+                    'status' => 'in_progress',
+                    'standings' => $gStandings,
                     'clubs' => $gClubs,
                     'fixtures' => $gFixtures,
                 ];
@@ -2590,14 +2598,432 @@ class ClubService
             }
         }
 
+        $knockoutRounds = [];
+        $knockoutFixtures = TournamentFixture::where('tournament_id', $tournament->id)
+            ->whereNull('group_id')
+            ->with(['homeClub:id,club_name,club_logo,name', 'awayClub:id,club_name,club_logo,name', 'matches'])
+            ->get();
+
+        if ($knockoutFixtures->isNotEmpty()) {
+            $roundsGrouped = $knockoutFixtures->groupBy('round');
+            foreach ($roundsGrouped as $rName => $rFixes) {
+                $rFixFormatted = [];
+                foreach ($rFixes as $kf) {
+                    $rFixFormatted[] = [
+                        'fixture_id' => (int) $kf->id,
+                        'placeholder_home' => $kf->home_placeholder ?: ($kf->homeClub ? ($kf->homeClub->club_name ?? $kf->homeClub->name) : 'TBD'),
+                        'placeholder_away' => $kf->away_placeholder ?: ($kf->awayClub ? ($kf->awayClub->club_name ?? $kf->awayClub->name) : 'TBD'),
+                        'is_locked_from_pool' => (bool) ($kf->status === 'scheduled' && ! $kf->home_club_id),
+                        'home_club' => $kf->homeClub ? ['club_id' => (int) $kf->home_club_id, 'club_name' => $kf->homeClub->club_name ?? $kf->homeClub->name] : null,
+                        'away_club' => $kf->awayClub ? ['club_id' => (int) $kf->away_club_id, 'club_name' => $kf->awayClub->club_name ?? $kf->awayClub->name] : null,
+                        'status' => $kf->status,
+                    ];
+                }
+                $knockoutRounds[] = [
+                    'round_name' => $rName,
+                    'status' => 'scheduled',
+                    'fixtures' => $rFixFormatted,
+                ];
+            }
+        }
+
         return [
             'tournament_id' => (int) $tournament->id,
+            'tournament_name' => $tournament->name,
             'tournament_type' => $tournamentType,
             'format' => $format,
-            'group_count' => $format === 'league' ? count($groups) : null,
+            'has_pools' => count($groups) > 0,
+            'group_count' => count($groups),
+            'qualifiers_per_pool' => 2,
             'players' => $playersList,
             'groups' => $groups,
             'fixtures' => $fixtures,
+            'knockout_stage' => [
+                'is_active' => count($knockoutRounds) > 0,
+                'rounds' => $knockoutRounds,
+            ],
+        ];
+    }
+
+    /**
+     * 5-Tier Tie-Breaker Resolution Engine & Per-Pool Standings (WSF Standards).
+     */
+    public function calculatePoolStandings(Tournament $tournament, ?int $groupId = null): array
+    {
+        $tournamentType = $tournament->tournament_type ?? ($tournament->opponent_club_id ? 'CLUB_TO_CLUB' : 'CLUB_MEMBERS_ONLY');
+        $isClubToClub = ($tournamentType === 'CLUB_TO_CLUB');
+
+        $groupsQuery = TournamentGroup::where('tournament_id', $tournament->id);
+        if ($groupId) {
+            $groupsQuery->where('id', $groupId);
+        }
+        $groups = $groupsQuery->with(['clubs', 'fixtures.matches.games'])->get();
+
+        $allGroupStandings = [];
+
+        foreach ($groups as $group) {
+            $stats = [];
+            $headToHeadWins = [];
+
+            if ($isClubToClub) {
+                foreach ($group->clubs as $c) {
+                    $stats[$c->id] = [
+                        'rank' => 1,
+                        'club_id' => (int) $c->id,
+                        'club_name' => $c->club_name ?? $c->name,
+                        'club_logo' => app_image_url($c->club_logo),
+                        'played' => 0,
+                        'wins' => 0,
+                        'losses' => 0,
+                        'games_won' => 0,
+                        'games_lost' => 0,
+                        'game_difference' => 0,
+                        'points_won' => 0,
+                        'points_lost' => 0,
+                        'point_difference' => 0,
+                        'points' => 0,
+                        'qualifies_for_knockout' => false,
+                        'knockout_seed' => null,
+                    ];
+                }
+            } else {
+                $groupPlayerIds = TournamentRegistration::where('tournament_id', $tournament->id)
+                    ->where('registration_status', 'registered')
+                    ->pluck('player_id');
+
+                $users = User::whereIn('id', $groupPlayerIds)->get();
+                foreach ($users as $u) {
+                    $stats[$u->id] = [
+                        'rank' => 1,
+                        'club_id' => (int) $u->id,
+                        'club_name' => $u->name,
+                        'club_logo' => app_image_url($u->profile_image),
+                        'played' => 0,
+                        'wins' => 0,
+                        'losses' => 0,
+                        'games_won' => 0,
+                        'games_lost' => 0,
+                        'game_difference' => 0,
+                        'points_won' => 0,
+                        'points_lost' => 0,
+                        'point_difference' => 0,
+                        'points' => 0,
+                        'qualifies_for_knockout' => false,
+                        'knockout_seed' => null,
+                    ];
+                }
+            }
+
+            foreach ($group->fixtures as $fixture) {
+                foreach ($fixture->matches as $m) {
+                    $hId = $isClubToClub ? $fixture->home_club_id : $m->home_player_id;
+                    $aId = $isClubToClub ? $fixture->away_club_id : $m->away_player_id;
+
+                    if ($m->status !== 'completed' && ! $m->winner_player_id) {
+                        continue;
+                    }
+
+                    if ($hId && ! isset($stats[$hId])) {
+                        $u = User::find($hId);
+                        if ($u) {
+                            $stats[$hId] = [
+                                'rank' => 1,
+                                'club_id' => (int) $u->id,
+                                'club_name' => $u->club_name ?? $u->name,
+                                'club_logo' => app_image_url($u->club_logo ?? $u->profile_image),
+                                'played' => 0, 'wins' => 0, 'losses' => 0,
+                                'games_won' => 0, 'games_lost' => 0, 'game_difference' => 0,
+                                'points_won' => 0, 'points_lost' => 0, 'point_difference' => 0,
+                                'points' => 0, 'qualifies_for_knockout' => false, 'knockout_seed' => null,
+                            ];
+                        }
+                    }
+
+                    if ($aId && ! isset($stats[$aId])) {
+                        $u = User::find($aId);
+                        if ($u) {
+                            $stats[$aId] = [
+                                'rank' => 1,
+                                'club_id' => (int) $u->id,
+                                'club_name' => $u->club_name ?? $u->name,
+                                'club_logo' => app_image_url($u->club_logo ?? $u->profile_image),
+                                'played' => 0, 'wins' => 0, 'losses' => 0,
+                                'games_won' => 0, 'games_lost' => 0, 'game_difference' => 0,
+                                'points_won' => 0, 'points_lost' => 0, 'point_difference' => 0,
+                                'points' => 0, 'qualifies_for_knockout' => false, 'knockout_seed' => null,
+                            ];
+                        }
+                    }
+
+                    if ($hId && isset($stats[$hId])) {
+                        $stats[$hId]['played']++;
+                    }
+                    if ($aId && isset($stats[$aId])) {
+                        $stats[$aId]['played']++;
+                    }
+
+                    $wPId = $m->winner_player_id;
+                    $winnerId = null;
+                    if ($wPId) {
+                        if ($wPId == $m->home_player_id) {
+                            $winnerId = $hId;
+                        } elseif ($wPId == $m->away_player_id) {
+                            $winnerId = $aId;
+                        }
+                    }
+
+                    if ($winnerId && $hId && $aId) {
+                        $loserId = ($winnerId == $hId) ? $aId : $hId;
+                        if (isset($stats[$winnerId])) {
+                            $stats[$winnerId]['wins']++;
+                            $stats[$winnerId]['points'] += 3;
+                        }
+                        if (isset($stats[$loserId])) {
+                            $stats[$loserId]['losses']++;
+                            $stats[$loserId]['points'] += 1;
+                        }
+
+                        $headToHeadWins[$winnerId][$loserId] = ($headToHeadWins[$winnerId][$loserId] ?? 0) + 1;
+                    }
+
+                    foreach ($m->games as $game) {
+                        $hScore = (int) $game->home_score;
+                        $aScore = (int) $game->away_score;
+                        $gWinner = $game->winner_player_id;
+
+                        if ($hId && isset($stats[$hId])) {
+                            $stats[$hId]['points_won'] += $hScore;
+                            $stats[$hId]['points_lost'] += $aScore;
+                            if ($gWinner && $gWinner == $m->home_player_id) {
+                                $stats[$hId]['games_won']++;
+                            } else {
+                                $stats[$hId]['games_lost']++;
+                            }
+                        }
+
+                        if ($aId && isset($stats[$aId])) {
+                            $stats[$aId]['points_won'] += $aScore;
+                            $stats[$aId]['points_lost'] += $hScore;
+                            if ($gWinner && $gWinner == $m->away_player_id) {
+                                $stats[$aId]['games_won']++;
+                            } else {
+                                $stats[$aId]['games_lost']++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach ($stats as $id => &$item) {
+                $item['game_difference'] = $item['games_won'] - $item['games_lost'];
+                $item['point_difference'] = $item['points_won'] - $item['points_lost'];
+            }
+            unset($item);
+
+            $standingsList = array_values($stats);
+            usort($standingsList, function ($a, $b) use ($headToHeadWins) {
+                if ($b['points'] !== $a['points']) {
+                    return $b['points'] <=> $a['points'];
+                }
+                if ($b['wins'] !== $a['wins']) {
+                    return $b['wins'] <=> $a['wins'];
+                }
+                $aVsB = $headToHeadWins[$a['club_id']][$b['club_id']] ?? 0;
+                $bVsA = $headToHeadWins[$b['club_id']][$a['club_id']] ?? 0;
+                if ($aVsB !== $bVsA) {
+                    return $bVsA <=> $aVsB;
+                }
+                if ($b['game_difference'] !== $a['game_difference']) {
+                    return $b['game_difference'] <=> $a['game_difference'];
+                }
+
+                return $b['point_difference'] <=> $a['point_difference'];
+            });
+
+            $qualifiersPerPool = 2;
+            foreach ($standingsList as $idx => &$st) {
+                $rank = $idx + 1;
+                $st['rank'] = $rank;
+                if ($rank <= $qualifiersPerPool) {
+                    $st['qualifies_for_knockout'] = true;
+                    $st['knockout_seed'] = "{$group->name} #{$rank}";
+                }
+            }
+            unset($st);
+
+            $allGroupStandings[$group->id] = [
+                'group_id' => (int) $group->id,
+                'group_name' => $group->name,
+                'status' => 'in_progress',
+                'standings' => $standingsList,
+            ];
+        }
+
+        return $allGroupStandings;
+    }
+
+    /**
+     * Multi-Resource Collision & Conflict Engine (Section 5).
+     */
+    public function validateResourceCollisions(
+        TournamentMatch $targetMatch,
+        string $newDate,
+        string $newTime,
+        ?int $courtId = null,
+        array $playerIds = [],
+        array $officialIds = []
+    ): array {
+        $errors = [];
+
+        $targetMatchId = $targetMatch->id;
+        try {
+            $matchStart = Carbon::parse("{$newDate} {$newTime}");
+        } catch (\Throwable $e) {
+            $matchStart = Carbon::now();
+        }
+
+        $matchEnd = (clone $matchStart)->addMinutes(45);
+        $playerRestEnd = (clone $matchEnd)->addMinutes(30);
+        $playerRestStart = (clone $matchStart)->subMinutes(30);
+
+        if ($courtId) {
+            $court = Court::find($courtId);
+            $courtName = $court?->name ?? "Court #{$courtId}";
+
+            $overlappingCourtMatch = TournamentMatch::where('id', '!=', $targetMatchId)
+                ->where('court_id', $courtId)
+                ->where('start_date', $newDate)
+                ->get()
+                ->first(function ($m) use ($matchStart, $matchEnd) {
+                    $mStart = Carbon::parse("{$m->start_date} ".($m->start_time ?: '00:00:00'));
+                    $mEnd = (clone $mStart)->addMinutes(45);
+
+                    return $matchStart->lt($mEnd) && $matchEnd->gt($mStart);
+                });
+
+            if ($overlappingCourtMatch) {
+                $errors['court'] = ["{$courtName} is already booked from {$newTime} for Match #{$overlappingCourtMatch->id}."];
+            }
+        }
+
+        foreach ($playerIds as $pId) {
+            if (! $pId) {
+                continue;
+            }
+            $playerUser = User::find($pId);
+            $pName = $playerUser?->name ?? "Player #{$pId}";
+
+            $conflictingPlayerMatch = TournamentMatch::where('id', '!=', $targetMatchId)
+                ->where('start_date', $newDate)
+                ->where(function ($q) use ($pId) {
+                    $q->where('home_player_id', $pId)->orWhere('away_player_id', $pId);
+                })
+                ->get()
+                ->first(function ($m) use ($playerRestStart, $playerRestEnd) {
+                    $mStart = Carbon::parse("{$m->start_date} ".($m->start_time ?: '00:00:00'));
+                    $mEnd = (clone $mStart)->addMinutes(45);
+
+                    return $mStart->lt($playerRestEnd) && $mEnd->gt($playerRestStart);
+                });
+
+            if ($conflictingPlayerMatch) {
+                $errors['player'] = ["Player {$pName} has a match scheduled around {$conflictingPlayerMatch->start_time}. Minimum 30 minutes rest required."];
+                break;
+            }
+        }
+
+        foreach ($officialIds as $oId) {
+            if (! $oId) {
+                continue;
+            }
+            $officialUser = User::find($oId);
+            $oName = $officialUser?->name ?? "Official #{$oId}";
+
+            $conflictingOfficialMatch = TournamentMatch::where('id', '!=', $targetMatchId)
+                ->where('start_date', $newDate)
+                ->where(function ($q) use ($oId) {
+                    $q->whereHas('scorers', function ($sq) use ($oId) {
+                        $sq->where('user_id', $oId);
+                    })->orWhereHas('umpires', function ($uq) use ($oId) {
+                        $uq->where('user_id', $oId);
+                    });
+                })
+                ->get()
+                ->first(function ($m) use ($matchStart, $matchEnd) {
+                    $mStart = Carbon::parse("{$m->start_date} ".($m->start_time ?: '00:00:00'));
+                    $mEnd = (clone $mStart)->addMinutes(45);
+
+                    return $matchStart->lt($mEnd) && $matchEnd->gt($mStart);
+                });
+
+            if ($conflictingOfficialMatch) {
+                $courtName = $conflictingOfficialMatch->court?->name ?? 'another court';
+                $errors['umpire'] = ["Official {$oName} is already assigned to Match #{$conflictingOfficialMatch->id} on {$courtName}."];
+                break;
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Reschedule match parameters (Section 4 PATCH endpoint handler).
+     */
+    public function rescheduleMatch(User $user, string $tournamentId, string $matchId, array $data): array
+    {
+        $match = TournamentMatch::where('id', $matchId)->first();
+        if (! $match) {
+            $this->apiError('Match not found.', 'NOT_FOUND', 404);
+        }
+
+        $newDate = $data['scheduled_date'] ?? $match->start_date;
+        $newTime = $data['scheduled_time'] ?? $match->start_time;
+        $courtId = isset($data['court_id']) ? (int) $data['court_id'] : $match->court_id;
+        $scorerId = isset($data['scorer_id']) ? (int) $data['scorer_id'] : null;
+        $umpireIds = isset($data['umpire_ids']) ? (array) $data['umpire_ids'] : [];
+
+        $playerIds = array_filter([(int) $match->home_player_id, (int) $match->away_player_id]);
+        $officialIds = array_filter(array_merge([$scorerId], $umpireIds));
+
+        $collisions = $this->validateResourceCollisions(
+            $match,
+            (string) $newDate,
+            (string) $newTime,
+            $courtId,
+            $playerIds,
+            $officialIds
+        );
+
+        if (! empty($collisions)) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => 'Schedule collision detected',
+                'errors' => $collisions,
+            ], 422));
+        }
+
+        $match->update([
+            'start_date' => $newDate,
+            'start_time' => $newTime,
+            'court_id' => $courtId,
+            'status' => 'rescheduled',
+        ]);
+
+        if ($scorerId) {
+            $match->scorers()->sync([$scorerId]);
+        }
+        if (! empty($umpireIds)) {
+            $match->umpires()->sync($umpireIds);
+        }
+
+        return [
+            'match_id' => (int) $match->id,
+            'tournament_id' => (int) $tournamentId,
+            'status' => 'rescheduled',
+            'scheduled_date' => $newDate,
+            'scheduled_time' => $newTime,
+            'court_id' => $courtId,
+            'reason' => $data['reason'] ?? 'Schedule updated',
         ];
     }
 

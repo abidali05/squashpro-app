@@ -497,12 +497,63 @@ class SquashMatchScoringService
             $winnerUser = User::find($winnerPlayerId);
             $winnerName = $winnerUser?->name ?? ($winnerPlayerId == $match->home_player_id ? $match->home_player_placeholder : $match->away_player_placeholder);
 
+            // Automated Backend Knockout Progression Sequence (Section 7)
+            $tournament = $match->fixture?->tournament;
+            $knockoutSeeded = false;
+
+            if ($tournament) {
+                $clubService = app(ClubService::class);
+                $standings = $clubService->calculatePoolStandings($tournament);
+
+                $groupFixtures = TournamentFixture::where('tournament_id', $tournament->id)
+                    ->whereNotNull('group_id')
+                    ->with('matches')
+                    ->get();
+
+                $allGroupMatchesDone = $groupFixtures->isNotEmpty() && $groupFixtures->every(function ($f) {
+                    return $f->matches->isEmpty() || $f->matches->every(fn ($m) => $m->status === 'completed');
+                });
+
+                if ($allGroupMatchesDone) {
+                    $knockoutFixtures = TournamentFixture::where('tournament_id', $tournament->id)
+                        ->whereNull('group_id')
+                        ->get();
+
+                    if ($knockoutFixtures->isNotEmpty()) {
+                        $seeds = [];
+                        foreach ($standings as $gId => $gData) {
+                            foreach ($gData['standings'] as $stItem) {
+                                if (!empty($stItem['knockout_seed'])) {
+                                    $seeds[$stItem['knockout_seed']] = $stItem['club_id'];
+                                }
+                            }
+                        }
+
+                        foreach ($knockoutFixtures as $kf) {
+                            $homeSeedKey = $kf->home_placeholder;
+                            $awaySeedKey = $kf->away_placeholder;
+
+                            $hClubId = $seeds[$homeSeedKey] ?? $kf->home_club_id;
+                            $aClubId = $seeds[$awaySeedKey] ?? $kf->away_club_id;
+
+                            $kf->update([
+                                'home_club_id' => $hClubId,
+                                'away_club_id' => $aClubId,
+                                'status' => 'scheduled',
+                            ]);
+                        }
+                        $knockoutSeeded = true;
+                    }
+                }
+            }
+
             return [
                 'match_id' => $match->id,
                 'status' => 'completed',
                 'winner_player_id' => $winnerPlayerId,
                 'winner_name' => $winnerName,
                 'final_score' => $finalScoreStr,
+                'knockout_generated' => $knockoutSeeded,
             ];
         });
     }

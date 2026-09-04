@@ -3,43 +3,43 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Club\IndexBookingsRequest;
+use App\Http\Requests\Api\V1\Club\IndexCourtsRequest;
+use App\Http\Requests\Api\V1\Club\IndexTournamentsRequest;
+use App\Http\Requests\Api\V1\Club\RespondToInvitationRequest;
+use App\Http\Requests\Api\V1\Club\SaveClubTournamentPoolsRequest;
+use App\Http\Requests\Api\V1\Club\SaveClubTournamentRulesRequest;
+use App\Http\Requests\Api\V1\Club\SetCourtMaintenanceRequest;
+use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
+use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
+use App\Http\Requests\Api\V1\Club\SubmitTeamRequest;
+use App\Http\Requests\Api\V1\Club\UpdateBookingStatusRequest;
+use App\Http\Requests\Api\V1\Club\UpdateClubDetailsRequest;
+use App\Http\Requests\Api\V1\Club\UpdateClubLogoRequest;
+use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
+use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
+use App\Http\Resources\Api\V1\BookingDetailResource;
+use App\Http\Resources\Api\V1\ClubBookingsResource;
+use App\Http\Resources\Api\V1\ClubCourtsResource;
 use App\Http\Resources\Api\V1\ClubDashboardResource;
 use App\Http\Resources\Api\V1\ClubDetailResource;
-use App\Http\Resources\Api\V1\ClubCourtsResource;
-use App\Http\Resources\Api\V1\ClubBookingsResource;
 use App\Http\Resources\Api\V1\ClubProfileCollection;
+use App\Http\Resources\Api\V1\ClubTournamentPoolResource;
+use App\Http\Resources\Api\V1\ClubTournamentRuleResource;
 use App\Http\Resources\Api\V1\ClubTournamentsResource;
 use App\Http\Resources\Api\V1\CourtDetailResource;
 use App\Http\Resources\Api\V1\CourtResource;
-use App\Http\Resources\Api\V1\BookingDetailResource;
-use App\Http\Requests\Api\V1\Club\IndexCourtsRequest;
-use App\Http\Requests\Api\V1\Club\IndexBookingsRequest;
-use App\Http\Requests\Api\V1\Club\IndexTournamentsRequest;
-use App\Http\Requests\Api\V1\Club\SetCourtMaintenanceRequest;
-use App\Http\Requests\Api\V1\Club\UpdateClubLogoRequest;
-use App\Http\Requests\Api\V1\Club\UpdateClubDetailsRequest;
-use App\Http\Requests\Api\V1\Club\UpdateBookingStatusRequest;
-use App\Http\Requests\Api\V1\Club\StoreTournamentRequest;
-use App\Http\Requests\Api\V1\Club\StoreCourtRequest;
-use App\Http\Requests\Api\V1\Club\UpdateTournamentRequest;
-use App\Http\Requests\Api\V1\Club\UpdateCourtRequest;
-use App\Http\Requests\Api\V1\Club\SaveClubTournamentRulesRequest;
-use App\Http\Requests\Api\V1\Club\SaveClubTournamentPoolsRequest;
-use App\Http\Requests\Api\V1\Club\RespondToInvitationRequest;
-use App\Http\Requests\Api\V1\Club\SubmitTeamRequest;
 use App\Http\Resources\Api\V1\TournamentDetailResource;
-use App\Http\Resources\Api\V1\ClubTournamentRuleResource;
-use App\Http\Resources\Api\V1\ClubTournamentPoolResource;
 use App\Models\TournamentRegistration;
 use App\Services\ClubService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class ClubController extends Controller
 {
-    public function __construct(private readonly ClubService $clubService)
-    {
-    }
+    public function __construct(private readonly ClubService $clubService) {}
 
     public function profile(Request $request): JsonResponse
     {
@@ -495,7 +495,7 @@ class ClubController extends Controller
             'groups.*.fixtures.*.matches.*.scorer_ids.*' => ['integer'],
             'groups.*.fixtures.*.matches.*.umpire_ids' => ['nullable', 'array'],
             'groups.*.fixtures.*.matches.*.umpire_ids.*' => ['integer'],
-            
+
             // Knockout fields
             'fixtures' => ['nullable', 'array'],
             'fixtures.*.round' => ['required_if:format,knockout', 'string', 'max:100'],
@@ -535,13 +535,13 @@ class ClubController extends Controller
     public function getFixtures(Request $request, string $tournament_id): JsonResponse
     {
         $playerId = $request->filled('player_id') ? (int) $request->input('player_id') : null;
-        $matchStartDate = $request->input('match_start_date') 
-            ?? $request->input('start_date') 
+        $matchStartDate = $request->input('match_start_date')
+            ?? $request->input('start_date')
             ?? $request->input('date');
 
         if ($matchStartDate) {
             try {
-                $matchStartDate = \Carbon\Carbon::parse($matchStartDate)->format('Y-m-d');
+                $matchStartDate = Carbon::parse($matchStartDate)->format('Y-m-d');
             } catch (\Throwable $e) {
                 $matchStartDate = null;
             }
@@ -552,6 +552,36 @@ class ClubController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Tournament fixtures retrieved successfully.',
+            'data' => $data,
+        ], 200);
+    }
+
+    public function rescheduleMatch(Request $request, string $tournament_id, string $match_id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'scheduled_date' => ['required', 'date_format:Y-m-d'],
+            'scheduled_time' => ['nullable', 'string'],
+            'court_id' => ['nullable', 'integer'],
+            'scorer_id' => ['nullable', 'integer'],
+            'umpire_ids' => ['nullable', 'array'],
+            'umpire_ids.*' => ['integer'],
+            'reason' => ['nullable', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error.',
+                'error_code' => 'VALIDATION_ERROR',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $this->clubService->rescheduleMatch($request->user(), $tournament_id, $match_id, $request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Match rescheduled successfully.',
             'data' => $data,
         ], 200);
     }

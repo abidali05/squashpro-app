@@ -91,9 +91,11 @@ Route::prefix('v1')->group(function () {
             Route::post('matches/{match_id}/start-next-game', [PlayerMatchScoringController::class, 'startNextGame']);
             Route::post('matches/{match_id}/next-game', [PlayerMatchScoringController::class, 'startNextGame']);
             Route::post('matches/{match_id}/rally', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/point', [PlayerMatchScoringController::class, 'rally']);
             Route::post('matches/{match_id}/undo', [PlayerMatchScoringController::class, 'undo']);
             Route::get('matches/{match_id}/live', [PlayerMatchScoringController::class, 'live']);
             Route::post('matches/{match_id}/complete', [PlayerMatchScoringController::class, 'complete']);
+            Route::patch('tournaments/{tournament_id}/matches/{match_id}/reschedule', [ClubController::class, 'rescheduleMatch']);
         });
 
         // Club Routes
@@ -123,6 +125,7 @@ Route::prefix('v1')->group(function () {
             Route::patch('tournaments/{tournament_id}/registrations/{registration_id}/accept', [ClubController::class, 'acceptRegistration']);
             Route::post('tournaments/{tournament_id}/fixtures', [ClubController::class, 'storeFixtures']);
             Route::get('tournaments/{tournament_id}/fixtures', [ClubController::class, 'getFixtures']);
+            Route::patch('tournaments/{tournament_id}/matches/{match_id}/reschedule', [ClubController::class, 'rescheduleMatch']);
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
