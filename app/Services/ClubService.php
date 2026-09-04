@@ -2310,7 +2310,75 @@ class ClubService
             }
         }
 
-        $formatFixture = function (TournamentFixture $f) use ($tournamentType, $playerIdFilter, $officialIdFilter, $matchStartDateFilter) {
+        $poolStandings = $this->calculatePoolStandings($tournament);
+
+        $rule = ClubTournamentRule::where('tournament_id', $tournament->id)->first();
+        $qualifiersPerPool = (int) ($rule?->pool_rules['qualifiers_per_pool'] ?? 2);
+        if ($qualifiersPerPool < 1) {
+            $qualifiersPerPool = 1;
+        }
+
+        $resolveQualifiedClub = function (?string $placeholder, ?int $clubId, $clubRelation = null) use ($poolStandings) {
+            if ($clubId && $clubRelation) {
+                return [
+                    'club_id' => (int) $clubId,
+                    'club_name' => $clubRelation->club_name ?? $clubRelation->name,
+                    'club_logo' => app_image_url($clubRelation->club_logo ?? $clubRelation->profile_image ?? null),
+                ];
+            }
+            if ($clubId) {
+                $u = User::find($clubId);
+                if ($u) {
+                    return [
+                        'club_id' => (int) $u->id,
+                        'club_name' => $u->club_name ?? $u->name,
+                        'club_logo' => app_image_url($u->club_logo ?? $u->profile_image),
+                    ];
+                }
+            }
+
+            if (! empty($placeholder) && ! empty($poolStandings)) {
+                $cleanP = strtolower(trim($placeholder));
+                foreach ($poolStandings as $gId => $gData) {
+                    $gName = $gData['group_name'] ?? '';
+                    foreach ($gData['standings'] as $st) {
+                        if (empty($st['qualifies_for_knockout'])) {
+                            continue;
+                        }
+                        $rank = (int) ($st['rank'] ?? 1);
+                        $seedStr1 = strtolower("{$gName} #{$rank}");
+                        $seedStr2 = strtolower("Pool {$gName} #{$rank}");
+                        $seedStr3 = strtolower("Group {$gName} #{$rank}");
+                        $seedStr4 = strtolower("{$gName} Winner");
+                        $seedStr5 = strtolower("Pool {$gName} Winner");
+                        $seedStr6 = strtolower("Group {$gName} Winner");
+                        $seedStr7 = strtolower("{$gName} Runner-Up");
+                        $seedStr8 = strtolower("Pool {$gName} Runner-Up");
+                        $seedStr9 = strtolower("Group {$gName} Runner-Up");
+
+                        $matchesGroup = str_contains($cleanP, strtolower($gName)) || in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3, $seedStr4, $seedStr5, $seedStr6, $seedStr7, $seedStr8, $seedStr9], true);
+
+                        if ($matchesGroup) {
+                            $isRank1Match = ($rank === 1 && (str_contains($cleanP, '#1') || str_contains($cleanP, 'winner')));
+                            $isRank2Match = ($rank === 2 && (str_contains($cleanP, '#2') || str_contains($cleanP, 'runner')));
+                            $exactMatch = in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3], true);
+
+                            if ($isRank1Match || $isRank2Match || $exactMatch) {
+                                return [
+                                    'club_id' => (int) $st['club_id'],
+                                    'club_name' => $st['club_name'],
+                                    'club_logo' => $st['club_logo'] ?? null,
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        $formatFixture = function (TournamentFixture $f) use ($tournament, $tournamentType, $playerIdFilter, $officialIdFilter, $matchStartDateFilter, $resolveQualifiedClub) {
             $fMatches = [];
             foreach ($f->matches as $m) {
                 $homePId = (int) ($m->home_player_id ?? 0);
@@ -2362,6 +2430,41 @@ class ClubService
                         'full_name' => $u?->name ?? "Player #{$m->home_player_id}",
                         'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
+                } else {
+                    $targetClubId = $f->home_club_id;
+                    if (! $targetClubId && ($m->home_player_placeholder || $f->home_placeholder)) {
+                        $resC = $resolveQualifiedClub($m->home_player_placeholder ?: $f->home_placeholder, null, null);
+                        $targetClubId = $resC['club_id'] ?? null;
+                    }
+
+                    if ($targetClubId) {
+                        $targetUser = User::find($targetClubId);
+                        if ($targetUser && ($targetUser->role === 'player' || empty($targetUser->club_name))) {
+                            $homePlayerMatch = [
+                                'player_id' => (int) $targetUser->id,
+                                'full_name' => $targetUser->name,
+                                'profile_image' => $targetUser->profile_image ? (str_starts_with($targetUser->profile_image, 'http') ? $targetUser->profile_image : Storage::disk('public')->url($targetUser->profile_image)) : '',
+                            ];
+                        } else {
+                            $teamPlayerId = DB::table('tournament_team_players')
+                                ->join('tournament_teams', 'tournament_team_players.team_id', '=', 'tournament_teams.id')
+                                ->where('tournament_teams.tournament_id', $tournament->id)
+                                ->where('tournament_teams.club_id', (int) $targetClubId)
+                                ->where('tournament_team_players.position', (int) ($m->sequence ?: 1))
+                                ->value('tournament_team_players.player_id');
+
+                            if ($teamPlayerId) {
+                                $pUser = User::find($teamPlayerId);
+                                if ($pUser) {
+                                    $homePlayerMatch = [
+                                        'player_id' => (int) $pUser->id,
+                                        'full_name' => $pUser->name,
+                                        'profile_image' => $pUser->profile_image ? (str_starts_with($pUser->profile_image, 'http') ? $pUser->profile_image : Storage::disk('public')->url($pUser->profile_image)) : '',
+                                    ];
+                                }
+                            }
+                        }
+                    }
                 }
 
                 $awayPlayerMatch = null;
@@ -2380,6 +2483,41 @@ class ClubService
                         'full_name' => $u?->name ?? "Player #{$m->away_player_id}",
                         'profile_image' => $img ? (str_starts_with($img, 'http') ? $img : Storage::disk('public')->url($img)) : '',
                     ];
+                } else {
+                    $targetClubId = $f->away_club_id;
+                    if (! $targetClubId && ($m->away_player_placeholder || $f->away_placeholder)) {
+                        $resC = $resolveQualifiedClub($m->away_player_placeholder ?: $f->away_placeholder, null, null);
+                        $targetClubId = $resC['club_id'] ?? null;
+                    }
+
+                    if ($targetClubId) {
+                        $targetUser = User::find($targetClubId);
+                        if ($targetUser && ($targetUser->role === 'player' || empty($targetUser->club_name))) {
+                            $awayPlayerMatch = [
+                                'player_id' => (int) $targetUser->id,
+                                'full_name' => $targetUser->name,
+                                'profile_image' => $targetUser->profile_image ? (str_starts_with($targetUser->profile_image, 'http') ? $targetUser->profile_image : Storage::disk('public')->url($targetUser->profile_image)) : '',
+                            ];
+                        } else {
+                            $teamPlayerId = DB::table('tournament_team_players')
+                                ->join('tournament_teams', 'tournament_team_players.team_id', '=', 'tournament_teams.id')
+                                ->where('tournament_teams.tournament_id', $tournament->id)
+                                ->where('tournament_teams.club_id', (int) $targetClubId)
+                                ->where('tournament_team_players.position', (int) ($m->sequence ?: 1))
+                                ->value('tournament_team_players.player_id');
+
+                            if ($teamPlayerId) {
+                                $pUser = User::find($teamPlayerId);
+                                if ($pUser) {
+                                    $awayPlayerMatch = [
+                                        'player_id' => (int) $pUser->id,
+                                        'full_name' => $pUser->name,
+                                        'profile_image' => $pUser->profile_image ? (str_starts_with($pUser->profile_image, 'http') ? $pUser->profile_image : Storage::disk('public')->url($pUser->profile_image)) : '',
+                                    ];
+                                }
+                            }
+                        }
+                    }
                 }
 
                 $venueUser = $m->venue_id ? User::find($m->venue_id) : null;
@@ -2492,6 +2630,19 @@ class ClubService
                     'profile_image' => $homePUser->profile_image ? (str_starts_with($homePUser->profile_image, 'http') ? $homePUser->profile_image : Storage::disk('public')->url($homePUser->profile_image)) : null,
                 ] : null;
 
+                if (! $fixData['home_player'] && $f->home_placeholder) {
+                    $res = $resolveQualifiedClub($f->home_placeholder, null, null);
+                    if ($res) {
+                        $fixData['home_player'] = [
+                            'id' => (int) $res['club_id'],
+                            'name' => $res['club_name'],
+                            'email' => null,
+                            'phone' => null,
+                            'profile_image' => $res['club_logo'] ?? null,
+                        ];
+                    }
+                }
+
                 $fixData['away_player'] = $awayPUser ? [
                     'id' => (int) $awayPUser->id,
                     'name' => $awayPUser->name,
@@ -2499,6 +2650,19 @@ class ClubService
                     'phone' => $awayPUser->phone,
                     'profile_image' => $awayPUser->profile_image ? (str_starts_with($awayPUser->profile_image, 'http') ? $awayPUser->profile_image : Storage::disk('public')->url($awayPUser->profile_image)) : null,
                 ] : null;
+
+                if (! $fixData['away_player'] && $f->away_placeholder) {
+                    $res = $resolveQualifiedClub($f->away_placeholder, null, null);
+                    if ($res) {
+                        $fixData['away_player'] = [
+                            'id' => (int) $res['club_id'],
+                            'name' => $res['club_name'],
+                            'email' => null,
+                            'phone' => null,
+                            'profile_image' => $res['club_logo'] ?? null,
+                        ];
+                    }
+                }
             } else {
                 $homeClub = null;
                 if ($f->home_club_id && $f->homeClub) {
@@ -2507,6 +2671,15 @@ class ClubService
                         'club_name' => $f->homeClub->club_name ?? $f->homeClub->name,
                         'club_logo' => app_image_url($f->homeClub->club_logo),
                     ];
+                } elseif ($f->home_placeholder) {
+                    $res = $resolveQualifiedClub($f->home_placeholder, null, null);
+                    if ($res) {
+                        $homeClub = [
+                            'club_id' => (int) $res['club_id'],
+                            'club_name' => $res['club_name'],
+                            'club_logo' => $res['club_logo'] ?? null,
+                        ];
+                    }
                 }
 
                 $awayClub = null;
@@ -2516,6 +2689,15 @@ class ClubService
                         'club_name' => $f->awayClub->club_name ?? $f->awayClub->name,
                         'club_logo' => app_image_url($f->awayClub->club_logo),
                     ];
+                } elseif ($f->away_placeholder) {
+                    $res = $resolveQualifiedClub($f->away_placeholder, null, null);
+                    if ($res) {
+                        $awayClub = [
+                            'club_id' => (int) $res['club_id'],
+                            'club_name' => $res['club_name'],
+                            'club_logo' => $res['club_logo'] ?? null,
+                        ];
+                    }
                 }
 
                 $fixData['home_club'] = $homeClub;
@@ -2551,8 +2733,6 @@ class ClubService
 
             return $fixData;
         };
-
-        $poolStandings = $this->calculatePoolStandings($tournament);
 
         if ($format === 'league') {
             $savedGroups = TournamentGroup::where('tournament_id', $tournament->id)
