@@ -9,6 +9,7 @@ use App\Models\TournamentMatchRally;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Models\TournamentFixture;
 use Exception;
 
 class SquashMatchScoringService
@@ -574,11 +575,130 @@ class SquashMatchScoringService
     }
 
     /**
+     * Resolve and update home_player_id and away_player_id if missing for knockout or placeholder matches.
+     */
+    public function ensureMatchPlayersResolved(TournamentMatch $match): void
+    {
+        if ($match->home_player_id && $match->away_player_id) {
+            return;
+        }
+
+        $fixture = $match->fixture;
+        if (!$fixture) {
+            return;
+        }
+
+        $tournament = $fixture->tournament;
+        if (!$tournament) {
+            return;
+        }
+
+        $poolStandings = null;
+        $resolveClub = function (?string $placeholder, ?int $clubId) use ($tournament, &$poolStandings) {
+            if ($clubId) {
+                return $clubId;
+            }
+            if (!empty($placeholder)) {
+                if ($poolStandings === null) {
+                    $poolStandings = app(ClubService::class)->calculatePoolStandings($tournament);
+                }
+                $cleanP = strtolower(trim($placeholder));
+                foreach ($poolStandings as $gId => $gData) {
+                    $gName = $gData['group_name'] ?? '';
+                    foreach ($gData['standings'] as $st) {
+                        if (empty($st['qualifies_for_knockout'])) {
+                            continue;
+                        }
+                        $rank = (int) ($st['rank'] ?? 1);
+                        $seedStr1 = strtolower("{$gName} #{$rank}");
+                        $seedStr2 = strtolower("Pool {$gName} #{$rank}");
+                        $seedStr3 = strtolower("Group {$gName} #{$rank}");
+                        $seedStr4 = strtolower("{$gName} Winner");
+                        $seedStr5 = strtolower("Pool {$gName} Winner");
+                        $seedStr6 = strtolower("Group {$gName} Winner");
+                        $seedStr7 = strtolower("{$gName} Runner-Up");
+                        $seedStr8 = strtolower("Pool {$gName} Runner-Up");
+                        $seedStr9 = strtolower("Group {$gName} Runner-Up");
+
+                        $matchesGroup = str_contains($cleanP, strtolower($gName)) || in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3, $seedStr4, $seedStr5, $seedStr6, $seedStr7, $seedStr8, $seedStr9], true);
+
+                        if ($matchesGroup) {
+                            $isRank1Match = ($rank === 1 && (str_contains($cleanP, '#1') || str_contains($cleanP, 'winner')));
+                            $isRank2Match = ($rank === 2 && (str_contains($cleanP, '#2') || str_contains($cleanP, 'runner')));
+                            $exactMatch = in_array($cleanP, [$seedStr1, $seedStr2, $seedStr3], true);
+
+                            if ($isRank1Match || $isRank2Match || $exactMatch) {
+                                return (int) $st['club_id'];
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        $updates = [];
+
+        if (!$match->home_player_id) {
+            $targetClubId = $fixture->home_club_id ?: $resolveClub($match->home_player_placeholder ?: $fixture->home_placeholder, null);
+            if ($targetClubId) {
+                $targetUser = User::find($targetClubId);
+                if ($targetUser && ($targetUser->role === 'player' || empty($targetUser->club_name))) {
+                    $updates['home_player_id'] = (int) $targetUser->id;
+                } else {
+                    $teamPlayerId = DB::table('tournament_team_players')
+                        ->join('tournament_teams', 'tournament_team_players.team_id', '=', 'tournament_teams.id')
+                        ->where('tournament_teams.tournament_id', $tournament->id)
+                        ->where('tournament_teams.club_id', (int) $targetClubId)
+                        ->where('tournament_team_players.position', (int) ($match->sequence ?: 1))
+                        ->value('tournament_team_players.player_id');
+
+                    if ($teamPlayerId) {
+                        $updates['home_player_id'] = (int) $teamPlayerId;
+                    }
+                }
+            }
+            if (empty($updates['home_player_id']) && $match->current_server_id) {
+                $updates['home_player_id'] = (int) $match->current_server_id;
+            }
+        }
+
+        if (!$match->away_player_id) {
+            $targetClubId = $fixture->away_club_id ?: $resolveClub($match->away_player_placeholder ?: $fixture->away_placeholder, null);
+            if ($targetClubId) {
+                $targetUser = User::find($targetClubId);
+                if ($targetUser && ($targetUser->role === 'player' || empty($targetUser->club_name))) {
+                    $updates['away_player_id'] = (int) $targetUser->id;
+                } else {
+                    $teamPlayerId = DB::table('tournament_team_players')
+                        ->join('tournament_teams', 'tournament_team_players.team_id', '=', 'tournament_teams.id')
+                        ->where('tournament_teams.tournament_id', $tournament->id)
+                        ->where('tournament_teams.club_id', (int) $targetClubId)
+                        ->where('tournament_team_players.position', (int) ($match->sequence ?: 1))
+                        ->value('tournament_team_players.player_id');
+
+                    if ($teamPlayerId) {
+                        $updates['away_player_id'] = (int) $teamPlayerId;
+                    }
+                }
+            }
+        }
+
+        if (!empty($updates)) {
+            $match->update($updates);
+            $match->refresh();
+            $match->load(['homePlayer', 'awayPlayer']);
+        }
+    }
+
+    /**
      * Construct live match state payload exact to backend specification.
      */
     public function getLiveMatchStatePayload(TournamentMatch $match, ?int $perPage = null, int $page = 1, ?int $gameNumber = null): array
     {
-        $match->loadMissing(['homePlayer', 'awayPlayer', 'winnerPlayer', 'court', 'venue', 'fixture.tournament']);
+        $match->loadMissing(['fixture.tournament']);
+        $this->ensureMatchPlayersResolved($match);
+        $match->loadMissing(['homePlayer', 'awayPlayer', 'winnerPlayer', 'court', 'venue']);
 
         $rules = $this->getScoringRules($match);
         $bestOf = $rules['best_of'];
