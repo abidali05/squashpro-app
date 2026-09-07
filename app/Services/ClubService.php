@@ -1431,9 +1431,12 @@ class ClubService
             $this->apiError('You are not authorized to submit a team for this tournament.', 'FORBIDDEN', 403);
         }
 
-        // Verify registration deadline has not passed
-        if ($tournament->registration_deadline && now()->greaterThan($tournament->registration_deadline)) {
-            $this->apiError('Registration deadline has passed.', 'REGISTRATION_CLOSED', 410);
+        // Verify registration deadline has not passed (allowed until end of deadline day)
+        if ($tournament->registration_deadline) {
+            $deadlineEnd = \Carbon\Carbon::parse($tournament->registration_deadline)->endOfDay();
+            if (now()->greaterThan($deadlineEnd)) {
+                $this->apiError('Registration deadline has passed.', 'REGISTRATION_CLOSED', 410);
+            }
         }
 
         // Verify capacity is not exceeded
