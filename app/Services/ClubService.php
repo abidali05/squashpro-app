@@ -3127,16 +3127,6 @@ class ClubService
                 $qualifiersPerPool = 1;
             }
 
-            foreach ($standingsList as $idx => &$st) {
-                $rank = $idx + 1;
-                $st['rank'] = $rank;
-                if ($rank <= $qualifiersPerPool) {
-                    $st['qualifies_for_knockout'] = true;
-                    $st['knockout_seed'] = "{$group->name} #{$rank}";
-                }
-            }
-            unset($st);
-
             $realCount = 0;
             $compCount = 0;
             $startCount = 0;
@@ -3144,21 +3134,36 @@ class ClubService
                 if (! ($gfx->is_rest || $gfx->is_bye)) {
                     $realCount++;
                     $mList = $gfx->matches;
-                    if ($mList->isNotEmpty() && $mList->every(fn ($m) => $m->status === 'completed')) {
+                    if ($mList->isNotEmpty() && $mList->every(fn ($m) => $m->status === 'completed' || $m->winner_player_id !== null)) {
                         $compCount++;
-                    } elseif ($mList->contains(fn ($m) => in_array($m->status, ['completed', 'in_progress', 'live'], true))) {
+                    } elseif ($mList->contains(fn ($m) => in_array($m->status, ['completed', 'in_progress', 'live'], true) || $m->winner_player_id !== null)) {
                         $startCount++;
                     }
                 }
             }
 
-            if ($realCount > 0 && $compCount === $realCount) {
+            $isGroupCompleted = ($realCount > 0 && $compCount === $realCount);
+
+            if ($isGroupCompleted) {
                 $gCalcStatus = 'completed';
             } elseif ($compCount > 0 || $startCount > 0) {
                 $gCalcStatus = 'in_progress';
             } else {
                 $gCalcStatus = 'scheduled';
             }
+
+            foreach ($standingsList as $idx => &$st) {
+                $rank = $idx + 1;
+                $st['rank'] = $rank;
+                if ($isGroupCompleted && $rank <= $qualifiersPerPool) {
+                    $st['qualifies_for_knockout'] = true;
+                    $st['knockout_seed'] = "{$group->name} #{$rank}";
+                } else {
+                    $st['qualifies_for_knockout'] = false;
+                    $st['knockout_seed'] = null;
+                }
+            }
+            unset($st);
 
             $allGroupStandings[$group->id] = [
                 'group_id' => (int) $group->id,
