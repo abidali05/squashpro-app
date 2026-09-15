@@ -32,6 +32,61 @@ class PlayerTournamentDetailResource extends JsonResource
             'registered_players'    => ((int) $this->registered_players_count) . '/' . ((int) $this->allowed_player),
             'rules'                 => $this->rules,
             'is_registered'         => (bool) ($registration && $registration->registration_status === 'registered'),
+            'team_status'           => (function () use ($request) {
+                $user = $request->user();
+                if (! $user) {
+                    return 'not_submitted';
+                }
+                if ($user->role === 'player') {
+                    $clubIds = \App\Models\ClubMembership::where('player_id', $user->id)
+                        ->where('status', 'approved')
+                        ->pluck('club_id')
+                        ->toArray();
+                    if (! empty($clubIds)) {
+                        $hasSubmittedTeam = \App\Models\TournamentTeam::where('tournament_id', $this->id)
+                            ->whereIn('club_id', $clubIds)
+                            ->where(function ($q) {
+                                $q->where('submission_status', 'submitted')
+                                  ->orWhereHas('players');
+                            })
+                            ->exists();
+                        if ($hasSubmittedTeam) {
+                            return 'submitted';
+                        }
+                    }
+                    return 'not_submitted';
+                }
+                $team = \App\Models\TournamentTeam::where('tournament_id', $this->id)
+                    ->where('club_id', $user->id)
+                    ->first();
+                return ($team && ($team->submission_status === 'submitted' || $team->players()->count() > 0)) ? 'submitted' : 'not_submitted';
+            })(),
+            'is_team_submitted'     => (function () use ($request) {
+                $user = $request->user();
+                if (! $user) {
+                    return false;
+                }
+                if ($user->role === 'player') {
+                    $clubIds = \App\Models\ClubMembership::where('player_id', $user->id)
+                        ->where('status', 'approved')
+                        ->pluck('club_id')
+                        ->toArray();
+                    if (! empty($clubIds)) {
+                        return \App\Models\TournamentTeam::where('tournament_id', $this->id)
+                            ->whereIn('club_id', $clubIds)
+                            ->where(function ($q) {
+                                $q->where('submission_status', 'submitted')
+                                  ->orWhereHas('players');
+                            })
+                            ->exists();
+                    }
+                    return false;
+                }
+                $team = \App\Models\TournamentTeam::where('tournament_id', $this->id)
+                    ->where('club_id', $user->id)
+                    ->first();
+                return (bool) ($team && ($team->submission_status === 'submitted' || $team->players()->count() > 0));
+            })(),
             
             // New fields
             'tournament_type'       => $this->tournament_type,

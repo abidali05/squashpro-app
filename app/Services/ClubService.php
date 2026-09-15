@@ -1450,7 +1450,7 @@ class ClubService
             $this->apiError('Duplicate player IDs are not allowed in the team roster.', 'DUPLICATE_PLAYERS', 422);
         }
 
-        // Verify each player exists and is eligible
+        // Verify each player exists, is eligible, and is not playing in another club's team for this tournament
         foreach ($playerIds as $pid) {
             $player = User::find($pid);
             if (! $player) {
@@ -1458,6 +1458,23 @@ class ClubService
             }
             if (! $this->validatePlayerEligibility($player, $club, $tournament)) {
                 $this->apiError("Player ID {$pid} is not eligible for this tournament.", 'PLAYER_NOT_ELIGIBLE', 422);
+            }
+
+            $otherTeamPlayer = TournamentTeamPlayer::where('player_id', $pid)
+                ->whereHas('team', function ($q) use ($tournament, $club) {
+                    $q->where('tournament_id', $tournament->id)
+                        ->where('club_id', '!=', $club->id);
+                })
+                ->first();
+
+            if ($otherTeamPlayer) {
+                $otherTeam = TournamentTeam::with('club')->find($otherTeamPlayer->team_id);
+                $otherClubName = $otherTeam && $otherTeam->club
+                    ? ($otherTeam->club->club_name ?? $otherTeam->club->name)
+                    : 'another club';
+                $playerName = $player->name ?? "Player ID {$pid}";
+
+                $this->apiError("Player {$playerName} is playing in another club team ({$otherClubName}).", 'PLAYER_IN_OTHER_TEAM', 422);
             }
         }
 
@@ -2107,6 +2124,112 @@ class ClubService
                         if (! empty($awayRoster) && ! in_array($awayPlayerId, $awayRoster, true)) {
                             $this->apiError("Player ID {$awayPlayerId} does not belong to the submitted roster of club {$awayClubId}.", 'VALIDATION_ERROR', 422);
                         }
+                    }
+                }
+            }
+        }
+
+        // Check 1: A player playing in a match cannot be selected as a scorer for any match
+        $playersInMatches = [];
+        foreach ($allFixtures as $fixData) {
+            $groupName = $fixData['group_name'] ?? null;
+            $matchesPay = $fixData['fixture']['matches'] ?? [];
+            if (! is_array($matchesPay)) {
+                continue;
+            }
+            foreach ($matchesPay as $mPay) {
+                $seq = $mPay['sequence'] ?? null;
+                $homePlayerId = isset($mPay['home_player_id']) && (int) $mPay['home_player_id'] > 0 ? (int) $mPay['home_player_id'] : null;
+                $awayPlayerId = isset($mPay['away_player_id']) && (int) $mPay['away_player_id'] > 0 ? (int) $mPay['away_player_id'] : null;
+
+                if ($homePlayerId !== null && ! isset($playersInMatches[$homePlayerId])) {
+                    $playersInMatches[$homePlayerId] = [
+                        'group_name' => $groupName,
+                        'sequence' => $seq,
+                    ];
+                }
+                if ($awayPlayerId !== null && ! isset($playersInMatches[$awayPlayerId])) {
+                    $playersInMatches[$awayPlayerId] = [
+                        'group_name' => $groupName,
+                        'sequence' => $seq,
+                    ];
+                }
+            }
+        }
+
+        foreach ($allFixtures as $fixData) {
+            $matchesPay = $fixData['fixture']['matches'] ?? [];
+            if (! is_array($matchesPay)) {
+                continue;
+            }
+            foreach ($matchesPay as $mPay) {
+                $scorerIds = ! empty($mPay['scorer_ids']) && is_array($mPay['scorer_ids'])
+                    ? array_map('intval', $mPay['scorer_ids'])
+                    : [];
+
+                foreach ($scorerIds as $scorerId) {
+                    if (isset($playersInMatches[$scorerId])) {
+                        $matchInfo = $playersInMatches[$scorerId];
+                        $groupLabel = ! empty($matchInfo['group_name']) ? "Group {$matchInfo['group_name']}" : 'Knockout stage';
+                        $player = User::find($scorerId);
+                        $pName = $player ? ($player->name ?? "Player ID {$scorerId}") : "Player ID {$scorerId}";
+
+                        $this->apiError(
+                            "Player {$pName} has a match in {$groupLabel} (Match {$matchInfo['sequence']}) and cannot be selected as a scorer.",
+                            'VALIDATION_ERROR',
+                            422
+                        );
+                    }
+                }
+            }
+        }
+
+        // Check 3: Minimum 15-minute gap between matches on the same court and date
+        $scheduledMatches = [];
+        foreach ($allFixtures as $fixData) {
+            $fix = $fixData['fixture'];
+            $fixtureCourtId = ! empty($fix['court_id']) ? (int) $fix['court_id'] : null;
+            $matchesPay = $fix['matches'] ?? [];
+            if (! is_array($matchesPay)) {
+                continue;
+            }
+            foreach ($matchesPay as $mPay) {
+                $courtId = ! empty($mPay['court_id']) ? (int) $mPay['court_id'] : $fixtureCourtId;
+                $startDate = $mPay['start_date'] ?? null;
+                $startTime = $mPay['start_time'] ?? null;
+                $seq = $mPay['sequence'] ?? null;
+
+                if ($courtId !== null && ! empty($startDate) && ! empty($startTime)) {
+                    try {
+                        $dateStr = \Carbon\Carbon::parse($startDate)->toDateString();
+                        $timeObj = \Carbon\Carbon::parse($startTime);
+                        $scheduledMatches[] = [
+                            'court_id' => $courtId,
+                            'start_date' => $dateStr,
+                            'start_time' => $timeObj,
+                            'sequence' => $seq,
+                        ];
+                    } catch (\Exception $e) {
+                        // Skip if date or time format is invalid
+                    }
+                }
+            }
+        }
+
+        $matchCount = count($scheduledMatches);
+        for ($i = 0; $i < $matchCount; $i++) {
+            for ($j = $i + 1; $j < $matchCount; $j++) {
+                $m1 = $scheduledMatches[$i];
+                $m2 = $scheduledMatches[$j];
+
+                if ($m1['court_id'] === $m2['court_id'] && $m1['start_date'] === $m2['start_date']) {
+                    $diffInMinutes = $m1['start_time']->diffInMinutes($m2['start_time']);
+                    if ($diffInMinutes < 15) {
+                        $this->apiError(
+                            "Match #{$m1['sequence']} and Match #{$m2['sequence']} on the same court and date must have at least a 15-minute time difference.",
+                            'VALIDATION_ERROR',
+                            422
+                        );
                     }
                 }
             }
