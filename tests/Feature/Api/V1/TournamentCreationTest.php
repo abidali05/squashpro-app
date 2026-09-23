@@ -51,8 +51,9 @@ class TournamentCreationTest extends TestCase
         $response = $this->postJson(
             '/api/v1/club/tournaments',
             [
+                'tournament_image' => 'https://example.com/image.jpg',
                 'name' => 'Summer Derby',
-                'format' => 'Knockout',
+                'format' => 'knockout',
                 'start_date' => '2026-08-20',
                 'end_date' => '2026-08-22',
                 'registration_deadline' => '2026-08-15T18:00:00Z',
@@ -62,7 +63,7 @@ class TournamentCreationTest extends TestCase
                 'tournament_type' => 'CLUB_TO_CLUB',
                 'opponent_club_id' => $this->club2->id,
                 'gender' => 'MALE',
-                'player_level' => ['INTERMEDIATE', 'ADVANCED'],
+                'player_level' => ['INTERMEDIATE', 'PROFESSIONAL'],
                 'age_group' => '15-25',
                 'maximum_players' => 10,
             ],
@@ -92,7 +93,7 @@ class TournamentCreationTest extends TestCase
 
         // Assert player_level array is saved correctly
         $tournament = Tournament::find($tournamentId);
-        $this->assertEquals(['INTERMEDIATE', 'ADVANCED'], $tournament->player_level);
+        $this->assertEquals(['INTERMEDIATE', 'PROFESSIONAL'], $tournament->player_level);
 
         // Audit log exists
         $this->assertDatabaseHas('audit_logs', [
@@ -184,8 +185,9 @@ class TournamentCreationTest extends TestCase
         $response = $this->postJson(
             '/api/v1/club/tournaments',
             [
+                'tournament_image' => 'https://example.com/image.jpg',
                 'name' => 'Internal Derby',
-                'format' => 'Round Robin',
+                'format' => 'league',
                 'start_date' => '2026-09-10',
                 'end_date' => '2026-09-12',
                 'registration_deadline' => '2026-09-05T18:00:00Z',
@@ -194,7 +196,7 @@ class TournamentCreationTest extends TestCase
                 'rules' => 'Round robin rules.',
                 'tournament_type' => 'CLUB_MEMBERS_ONLY',
                 'gender' => 'MALE',
-                'player_level' => ['INTERMEDIATE', 'ADVANCED'],
+                'player_level' => ['INTERMEDIATE', 'PROFESSIONAL'],
                 'age_group' => '15-25',
                 'maximum_players' => 16,
             ],
@@ -229,7 +231,7 @@ class TournamentCreationTest extends TestCase
                 'tournament_type' => 'CLUB_TO_CLUB',
                 'opponent_club_id' => $this->club1->id, // Organizing club itself
                 'gender' => 'MALE',
-                'player_level' => ['ADVANCED'],
+                'player_level' => ['INTERMEDIATE'],
                 'age_group' => '15-25',
                 'maximum_players' => 10,
             ],
@@ -258,14 +260,14 @@ class TournamentCreationTest extends TestCase
             'role' => 'player',
             'status' => 'active',
             'gender' => 'MALE',
-            'playing_level' => 'ADVANCED',
+            'playing_level' => 'INTERMEDIATE',
             'dob' => '2005-05-15', // Age 21
         ]);
         $player2 = User::factory()->create([
             'role' => 'player',
             'status' => 'active',
             'gender' => 'MALE',
-            'playing_level' => 'ADVANCED',
+            'playing_level' => 'INTERMEDIATE',
             'dob' => '2004-03-10', // Age 22
         ]);
         
@@ -293,8 +295,9 @@ class TournamentCreationTest extends TestCase
         ]);
 
         $payload = [
+            'tournament_image' => 'https://example.com/image.jpg',
             'name' => 'Winter League Clash',
-            'format' => 'Knockout',
+            'format' => 'knockout',
             'start_date' => '2026-08-20',
             'end_date' => '2026-08-22',
             'registration_deadline' => '2026-08-15T18:00:00Z',
@@ -305,7 +308,7 @@ class TournamentCreationTest extends TestCase
             'invited_club_ids' => [$this->club2->id, $club3->id],
             'host_team_player_ids' => [$player2->id, $player1->id], // Sequenced
             'gender' => 'MALE',
-            'player_level' => ['ADVANCED'],
+            'player_level' => ['INTERMEDIATE'],
             'age_group' => '15-25',
             'maximum_players' => 10,
         ];
@@ -390,5 +393,65 @@ class TournamentCreationTest extends TestCase
         );
         $responseInvalid3->assertStatus(422)
             ->assertJsonValidationErrors(['host_team_player_ids.1']);
+    }
+
+    public function test_tournament_creation_with_gender_all_allows_both_male_and_female_players(): void
+    {
+        $malePlayer = User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+            'gender' => 'male',
+            'playing_level' => 'intermediate',
+            'dob' => '2000-01-01',
+        ]);
+        ClubMembership::create([
+            'club_id' => $this->club1->id,
+            'player_id' => $malePlayer->id,
+            'membership_number' => 'CM-MALE',
+            'status' => ClubMembership::STATUS_APPROVED,
+        ]);
+
+        $femalePlayer = User::factory()->create([
+            'role' => 'player',
+            'status' => 'active',
+            'gender' => 'female',
+            'playing_level' => 'intermediate',
+            'dob' => '2000-01-01',
+        ]);
+        ClubMembership::create([
+            'club_id' => $this->club1->id,
+            'player_id' => $femalePlayer->id,
+            'membership_number' => 'CM-FEMALE',
+            'status' => ClubMembership::STATUS_APPROVED,
+        ]);
+
+        $payload = [
+            'tournament_image' => 'https://example.com/tournament.jpg',
+            'name' => 'Mixed Open Cup',
+            'format' => 'knockout',
+            'start_date' => '2026-10-10',
+            'end_date' => '2026-10-15',
+            'registration_deadline' => '2026-10-05',
+            'entry_fees' => 100,
+            'prize_pool' => 1000,
+            'tournament_type' => 'CLUB_TO_CLUB',
+            'invited_club_ids' => [$this->club2->id],
+            'host_team_player_ids' => [$malePlayer->id, $femalePlayer->id],
+            'gender' => 'ALL',
+            'player_level' => ['INTERMEDIATE'],
+            'age_group' => '18-40',
+            'maximum_players' => 16,
+        ];
+
+        $response = $this->postJson(
+            '/api/v1/club/tournaments',
+            $payload,
+            ['Authorization' => "Bearer {$this->token1}"]
+        );
+
+        $response->assertCreated();
+        $response->assertJsonPath('success', true);
+        $tournament = \App\Models\Tournament::find($response->json('data.id'));
+        $this->assertEquals('ALL', $tournament->gender);
     }
 }

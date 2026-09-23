@@ -126,17 +126,22 @@ class PlayerDashboardController extends Controller
             // 2. Criteria Matching (gender, player_level, age_group):
             
             // Gender match
-            if ($tournament->gender && $tournament->gender !== 'OPEN' && $tournament->gender !== 'MIXED') {
+            $genderUpper = strtoupper((string) $tournament->gender);
+            if ($tournament->gender && ! in_array($genderUpper, ['ALL', 'OPEN'], true)) {
                 if (strcasecmp((string) $user->gender, (string) $tournament->gender) !== 0) {
                     return false;
                 }
             }
 
             // Level match
-            if ($tournament->player_level && is_array($tournament->player_level)) {
-                $playerLevel = strtoupper((string) $user->playing_level);
-                $allowedLevels = array_map('strtoupper', $tournament->player_level);
-                if (!in_array($playerLevel, $allowedLevels, true)) {
+            $tournamentLevels = $this->parseLevels($tournament->player_level);
+            if (!empty($tournamentLevels)) {
+                $userLevels = $this->parseLevels($user->playing_level);
+                if (in_array('PROFESSIONAL', $tournamentLevels, true) && !in_array('ADVANCED', $tournamentLevels, true)) {
+                    $tournamentLevels[] = 'ADVANCED';
+                }
+
+                if (!empty($userLevels) && empty(array_intersect($userLevels, $tournamentLevels))) {
                     return false;
                 }
             }
@@ -203,5 +208,30 @@ class PlayerDashboardController extends Controller
         $numeric = (float) ($value ?? 0);
 
         return $numeric == (int) $numeric ? (int) $numeric : $numeric;
+    }
+
+    private function parseLevels(mixed $input): array
+    {
+        if (empty($input)) {
+            return [];
+        }
+
+        if (is_array($input)) {
+            return array_values(array_filter(array_map('strtoupper', array_map('trim', $input))));
+        }
+
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', $decoded))));
+            }
+            if (str_contains($input, ',')) {
+                return array_values(array_filter(array_map('strtoupper', array_map('trim', explode(',', $input)))));
+            }
+            $trimmed = strtoupper(trim($input));
+            return $trimmed !== '' ? [$trimmed] : [];
+        }
+
+        return [];
     }
 }

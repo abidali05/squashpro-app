@@ -124,7 +124,7 @@
             ['label' => 'Format', 'field' => 'format', 'sortable' => true],
             ['label' => 'Start', 'field' => 'start_date', 'sortable' => true],
             ['label' => 'Deadline', 'field' => 'registration_deadline', 'sortable' => true],
-            ['label' => 'Players', 'sortable' => false],
+            // ['label' => 'Players', 'sortable' => false],
             ['label' => 'Entry Fees', 'field' => 'entry_fees', 'sortable' => true],
             ['label' => 'Prize Pool', 'field' => 'prize_pool', 'sortable' => true],
             ['label' => 'Status', 'field' => 'status', 'sortable' => true],
@@ -163,31 +163,49 @@
                 <td>{{ \Illuminate\Support\Str::headline((string) $tournament->format) }}</td>
                 <td class="cell-muted">{{ $tournament->start_date?->format('Y-m-d') }}</td>
                 <td class="cell-muted">{{ $tournament->registration_deadline?->format('Y-m-d') }}</td>
-                <td>{{ (int) $tournament->registered_players_count }}/{{ (int) $tournament->allowed_player }}</td>
+                {{-- <td>{{ (int) $tournament->registered_players_count }}/{{ (int) $tournament->allowed_player }}</td> --}}
                 <td> {{ number_format((float) $tournament->entry_fees, 0) }}</td>
                 <td> {{ number_format((float) $tournament->prize_pool, 0) }}</td>
                 <td><span class="badge {{ $badgeClass }}">{{ $badgeLabel }}</span></td>
-                <td class="text-end">
-                    @include('admin.components.action-buttons', [
-                        'type' => 'view',
-                        'href' => route('admin.tournaments.show', $tournament),
-                        'title' => 'View Tournament',
-                    ])
-                    @include('admin.components.action-buttons', [
-                        'type' => 'edit',
-                        'href' => route('admin.tournaments.edit', $tournament),
-                        'title' => 'Edit Tournament',
-                    ])
-                    @include('admin.components.action-buttons', [
-                        'type' => 'delete',
-                        'formAction' => route('admin.tournaments.destroy', $tournament),
-                        'confirm' => "Delete tournament \"{$tournament->name}\"?",
-                    ])
+                <td class="text-center">
+                    <div class="dropdown">
+                        <button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                            <i class="mdi mdi-dots-vertical fs-4 text-muted"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <a class="dropdown-item" href="{{ route('admin.tournaments.show', $tournament) }}">
+                                <i class="mdi mdi-eye-outline me-2 text-primary"></i> View Details
+                            </a>
+                            <a class="dropdown-item" href="{{ route('admin.tournaments.rules', $tournament) }}">
+                                <i class="mdi mdi-cogs me-2 text-info"></i> Rule View
+                            </a>
+                            <a class="dropdown-item" href="{{ route('admin.tournaments.pools', $tournament) }}">
+                                <i class="mdi mdi-format-list-checks me-2" style="color: #7e22ce;"></i> Pool View
+                            </a>
+                            <a class="dropdown-item" href="{{ route('admin.tournaments.fixtures', $tournament) }}">
+                                <i class="mdi mdi-tournament me-2 text-warning"></i> Fixture View
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="{{ route('admin.tournaments.edit', $tournament) }}">
+                                <i class="mdi mdi-pencil-outline me-2 text-secondary"></i> Edit Tournament
+                            </a>
+                            @php
+                                $delFormId = 'del-t-form-' . $tournament->id;
+                            @endphp
+                            <form id="{{ $delFormId }}" action="{{ route('admin.tournaments.destroy', $tournament) }}" method="POST" class="d-none">
+                                @csrf
+                                @method('DELETE')
+                            </form>
+                            <a class="dropdown-item text-danger" href="javascript:void(0);" onclick="confirmDelete('{{ $delFormId }}', 'Delete tournament &quot;{{ addslashes($tournament->name) }}&quot;?')">
+                                <i class="mdi mdi-trash-can-outline me-2"></i> Delete Tournament
+                            </a>
+                        </div>
+                    </div>
                 </td>
             </tr>
         @empty
             <tr>
-                <td colspan="10" class="admin-empty-state">No tournaments found.</td>
+                <td colspan="9" class="admin-empty-state">No tournaments found.</td>
             </tr>
         @endforelse
     @endcomponent

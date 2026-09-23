@@ -13,6 +13,9 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PlayerController;
 use App\Http\Controllers\Admin\MembershipManagementController;
 use App\Http\Controllers\Admin\TournamentRegistrationController;
+use App\Http\Controllers\Admin\TournamentRuleManagementController;
+use App\Http\Controllers\Admin\TournamentPoolManagementController;
+use App\Http\Controllers\Admin\FixtureManagementController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BookingReviewManagementController;
 use App\Http\Controllers\Admin\ReportController;
@@ -78,6 +81,9 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('tournaments/create', [TournamentManagementController::class, 'create'])->name('tournaments.create');
         Route::post('tournaments', [TournamentManagementController::class, 'store'])->name('tournaments.store');
         Route::get('tournaments/{tournament}', [TournamentManagementController::class, 'show'])->name('tournaments.show');
+        Route::get('tournaments/{tournament}/rules', [TournamentRuleManagementController::class, 'showByTournament'])->name('tournaments.rules');
+        Route::get('tournaments/{tournament}/pools', [TournamentPoolManagementController::class, 'showByTournament'])->name('tournaments.pools');
+        Route::get('tournaments/{tournament}/fixtures', [FixtureManagementController::class, 'showByTournament'])->name('tournaments.fixtures');
         Route::get('tournaments/{tournament}/edit', [TournamentManagementController::class, 'edit'])->name('tournaments.edit');
         Route::put('tournaments/{tournament}', [TournamentManagementController::class, 'update'])->name('tournaments.update');
         Route::delete('tournaments/{tournament}', [TournamentManagementController::class, 'destroy'])->name('tournaments.destroy');
@@ -87,6 +93,22 @@ Route::middleware(['auth', 'verified', 'role:super_admin|admin'])
         Route::get('tournament-registrations', [TournamentRegistrationController::class, 'index'])->name('tournament-registrations.index');
         Route::post('tournament-registrations/{registration}/approve', [TournamentRegistrationController::class, 'approve'])->name('tournament-registrations.approve');
         Route::delete('tournament-registrations/{registration}', [TournamentRegistrationController::class, 'destroy'])->name('tournament-registrations.destroy');
+
+        // Tournament Rules Management
+        Route::get('tournament-rules', [TournamentRuleManagementController::class, 'index'])->name('tournament-rules.index');
+        Route::get('tournament-rules/{tournamentRule}', [TournamentRuleManagementController::class, 'show'])->name('tournament-rules.show');
+        Route::delete('tournament-rules/{tournamentRule}', [TournamentRuleManagementController::class, 'destroy'])->name('tournament-rules.destroy');
+
+        // Tournament Pools Management
+        Route::get('tournament-pools', [TournamentPoolManagementController::class, 'index'])->name('tournament-pools.index');
+        Route::get('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'show'])->name('tournament-pools.show');
+        Route::delete('tournament-pools/{tournamentPool}', [TournamentPoolManagementController::class, 'destroy'])->name('tournament-pools.destroy');
+
+        // Fixtures & Matches Management
+        Route::get('fixtures', [FixtureManagementController::class, 'index'])->name('fixtures.index');
+        Route::get('fixtures/{fixture}', [FixtureManagementController::class, 'show'])->name('fixtures.show');
+        Route::get('matches/{match}', [FixtureManagementController::class, 'showMatch'])->name('matches.show');
+        Route::delete('fixtures/{fixture}', [FixtureManagementController::class, 'destroy'])->name('fixtures.destroy');
         Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
         Route::get('revenue-reports', [RevenueReportController::class, 'index'])->name('revenue.index');
         Route::get('notifications', [NotificationManagementController::class, 'index'])->name('notifications.index');

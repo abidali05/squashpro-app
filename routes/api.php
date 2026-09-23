@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\PlayerDashboardController;
 use App\Http\Controllers\Api\V1\PlayerProfileController;
 use App\Http\Controllers\Api\V1\PlayerTournamentController;
 use App\Http\Controllers\Api\V1\PlayerOfficialTournamentController;
+use App\Http\Controllers\Api\V1\PlayerMatchScoringController;
 use App\Http\Controllers\Api\V1\PublicCityController;
 use App\Http\Controllers\Api\V1\PublicClubController;
 use App\Http\Controllers\Api\V1\PublicPlayerController;
@@ -24,6 +25,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/cities', [PublicCityController::class, 'index']);
     Route::get('/clubs', [PublicClubController::class, 'index']);
+    Route::get('/clubs/{club_id}/courts', [PublicClubController::class, 'courts']);
+    Route::get('/courts/{club_id}', [PublicClubController::class, 'courts']);
     Route::get('/players', [PublicPlayerController::class, 'index']);
     Route::get('/help-support', [PlayerContentController::class, 'helpSupport']);
     Route::get('/privacy-policy', [PlayerContentController::class, 'privacyPolicy']);
@@ -74,11 +77,25 @@ Route::prefix('v1')->group(function () {
             Route::post('tournament/register', [PlayerTournamentController::class, 'register']);
             Route::patch('tournaments/{tournament_id}/participation', [PlayerTournamentController::class, 'respondToParticipation']);
             Route::post('tournament/{tournament_id}/payment', [PlayerTournamentController::class, 'completePayment']);
+            Route::get('tournaments/{tournament_id}/rules', [PlayerTournamentController::class, 'rules']);
+            Route::get('tournaments/{tournament_id}/pools', [PlayerTournamentController::class, 'pools']);
+            Route::get('tournaments/{tournament_id}/fixtures', [PlayerTournamentController::class, 'fixtures']);
 
             // Official Scorer/Umpire routes
             Route::get('official-tournaments', [PlayerOfficialTournamentController::class, 'index']);
             Route::get('official-tournaments/{tournament_id}', [PlayerOfficialTournamentController::class, 'show']);
             Route::get('official-tournaments/{tournament_id}/fixtures', [PlayerOfficialTournamentController::class, 'fixtures']);
+
+            // Live Squash Match Scoring Routes
+            Route::post('matches/{match_id}/start', [PlayerMatchScoringController::class, 'start']);
+            Route::post('matches/{match_id}/start-next-game', [PlayerMatchScoringController::class, 'startNextGame']);
+            Route::post('matches/{match_id}/next-game', [PlayerMatchScoringController::class, 'startNextGame']);
+            Route::post('matches/{match_id}/rally', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/point', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/undo', [PlayerMatchScoringController::class, 'undo']);
+            Route::get('matches/{match_id}/live', [PlayerMatchScoringController::class, 'live']);
+            Route::post('matches/{match_id}/complete', [PlayerMatchScoringController::class, 'complete']);
+            Route::patch('tournaments/{tournament_id}/matches/{match_id}/reschedule', [ClubController::class, 'rescheduleMatch']);
         });
 
         // Club Routes
@@ -99,6 +116,8 @@ Route::prefix('v1')->group(function () {
             Route::post('tournaments/{tournament_id}/update', [ClubController::class, 'updateTournament']);
             Route::get('tournaments/{tournament_id}/rules', [ClubController::class, 'getTournamentRules']);
             Route::post('tournaments/{tournament_id}/rules', [ClubController::class, 'storeTournamentRules']);
+            Route::get('tournaments/{tournament_id}/pools', [ClubController::class, 'getTournamentPools']);
+            Route::post('tournaments/{tournament_id}/pools', [ClubController::class, 'storeTournamentPools']);
             Route::patch('tournaments/{tournament_id}/invitation', [ClubController::class, 'respondToInvitation']);
             Route::get('tournaments/{tournament_id}/eligible-players', [ClubController::class, 'eligiblePlayers']);
             Route::post('tournaments/{tournament_id}/team', [ClubController::class, 'submitTeam']);
@@ -106,6 +125,17 @@ Route::prefix('v1')->group(function () {
             Route::patch('tournaments/{tournament_id}/registrations/{registration_id}/accept', [ClubController::class, 'acceptRegistration']);
             Route::post('tournaments/{tournament_id}/fixtures', [ClubController::class, 'storeFixtures']);
             Route::get('tournaments/{tournament_id}/fixtures', [ClubController::class, 'getFixtures']);
+            Route::patch('tournaments/{tournament_id}/matches/{match_id}/reschedule', [ClubController::class, 'rescheduleMatch']);
+
+            // Live Squash Match Scoring Routes for Club
+            Route::post('matches/{match_id}/start', [PlayerMatchScoringController::class, 'start']);
+            Route::post('matches/{match_id}/start-next-game', [PlayerMatchScoringController::class, 'startNextGame']);
+            Route::post('matches/{match_id}/next-game', [PlayerMatchScoringController::class, 'startNextGame']);
+            Route::post('matches/{match_id}/rally', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/point', [PlayerMatchScoringController::class, 'rally']);
+            Route::post('matches/{match_id}/undo', [PlayerMatchScoringController::class, 'undo']);
+            Route::get('matches/{match_id}/live', [PlayerMatchScoringController::class, 'live']);
+            Route::post('matches/{match_id}/complete', [PlayerMatchScoringController::class, 'complete']);
             Route::get('profile', [ClubController::class, 'profile']);
             Route::post('details/update', [ClubController::class, 'updateClubDetails']);
             Route::post('logo/update', [ClubController::class, 'updateClubLogo']);
