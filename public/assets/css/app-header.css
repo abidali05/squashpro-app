@@ -367,13 +367,13 @@
 /* ─────────────────────────────────────────────────────────────
    10. MENU TOGGLE (Mobile)
    ───────────────────────────────────────────────────────────── */
-.layout-menu-toggle {
+.layout-navbar .layout-menu-toggle {
   display: flex;
   align-items: center;
   height: 100%;
 }
 
-.layout-menu-toggle .nav-link {
+.layout-navbar .layout-menu-toggle .nav-link {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -386,10 +386,23 @@
   transition: all 0.2s ease;
 }
 
-.layout-menu-toggle .nav-link:hover {
+.layout-navbar .layout-menu-toggle .nav-link:hover {
   background: #F3F4F6;
   border-color: #D1D5DB;
   color: #374151;
+}
+
+/* Fix: Overlay must stay hidden and not fade the page unless sidebar menu is open */
+.layout-overlay {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+html.layout-menu-expanded .layout-overlay,
+body.layout-menu-expanded .layout-overlay,
+.layout-menu-expanded .layout-overlay {
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -428,7 +441,7 @@
   }
 
   .app-header-icon,
-  .layout-menu-toggle .nav-link {
+  .layout-navbar .layout-menu-toggle .nav-link {
     width: 40px;
     height: 40px;
   }
@@ -487,7 +500,7 @@
   }
 
   .app-header-icon,
-  .layout-menu-toggle .nav-link {
+  .layout-navbar .layout-menu-toggle .nav-link {
     width: 38px;
     height: 38px;
   }
@@ -532,7 +545,7 @@
    ───────────────────────────────────────────────────────────── */
 .app-header-icon:focus,
 .app-header-profile:focus,
-.layout-menu-toggle .nav-link:focus {
+.layout-navbar .layout-menu-toggle .nav-link:focus {
   outline: 2px solid #B5F23C;
   outline-offset: 2px;
 }

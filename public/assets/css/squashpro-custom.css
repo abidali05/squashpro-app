@@ -534,14 +534,27 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Menu Toggle */
-.layout-menu-toggle {
+.layout-navbar .layout-menu-toggle {
   height: 100%;
 }
 
-.layout-menu-toggle .nav-link {
+.layout-navbar .layout-menu-toggle .nav-link {
   height: 100%;
   display: flex;
   align-items: center;
+}
+
+/* Ensure layout-overlay is strictly hidden unless menu is expanded */
+.layout-overlay {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+html.layout-menu-expanded .layout-overlay,
+body.layout-menu-expanded .layout-overlay,
+.layout-menu-expanded .layout-overlay {
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 /* Responsive Navbar */
